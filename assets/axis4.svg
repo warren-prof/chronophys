@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   version="1.1"
+   id="svg2"
+   width="136.56123"
+   height="136.5612"
+   viewBox="0 0 136.56123 136.5612"
+   sodipodi:docname="axis4.pdf"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs6" />
+  <sodipodi:namedview
+     id="namedview4"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false" />
+  <g
+     id="g10"
+     inkscape:groupmode="layer"
+     inkscape:label="Page 1"
+     transform="matrix(1.3333333,0,0,1.3333333,0,1.4140303e-6)">
+    <g
+       id="g12">
+      <g
+         id="g14">
+        <path
+           d="M 42.676,1.945 V 83.992"
+           style="fill:none;stroke:#000000;stroke-width:3.89197;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+           id="path16" />
+      </g>
+      <path
+         d="m 53.863,83.418 -8.75,17.496 c -1.004,2.008 -3.867,2.008 -4.871,0 L 31.492,83.418 C 30.371,81.18 32,78.543 34.504,78.543 h 16.348 c 2.503,0 4.128,2.637 3.011,4.875 z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:none"
+         id="path18" />
+      <g
+         id="g20">
+        <path
+           d="M 1.945,42.676 H 83.992"
+           style="fill:none;stroke:#000000;stroke-width:3.89197;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+           id="path22" />
+      </g>
+      <path
+         d="m 83.418,31.492 17.496,8.75 c 2.008,1.004 2.008,3.867 0,4.871 l -17.496,8.75 C 81.18,54.98 78.543,53.355 78.543,50.852 V 34.504 c 0,-2.504 2.637,-4.133 4.875,-3.012 z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:none"
+         id="path24" />
+    </g>
+  </g>
+</svg>
