@@ -1,8 +1,12 @@
-# ChronoPhys est un logiciel gratuit pour réaliser des exploitations chronophotographiques en Sciences-Physiques
+# ChronoPhys est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques
 # License Créative Commons : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)
 # Auteur : Thibault Giauffret, ensciences.fr (2022)
-# Version : dev-beta v0.2 (01 mai 2022)
+# Version : dev-beta v0.3 (04 mai 2022)
 
+
+# --------------------------------------------------   
+# Importation des librairies
+# -------------------------------------------------- 
 import sys, os, csv
 
 # Gestion de l'interface
@@ -13,23 +17,26 @@ from PyQt5.QtCore import (
     QRect,
     QPoint,
     QThread,
-    Qt,
+    Qt
 )
 from PyQt5.QtGui import (
     QIcon,
     QDoubleValidator,
+    QIntValidator,
     QPixmap,
     QPainter,
     QPen,
     QBrush,
     QImage,
     QColor,
-    QPalette
+    QPalette,
+    QTransform
 )
 from PyQt5.QtWidgets import (
     QMainWindow,
     QSizePolicy,
     QVBoxLayout,
+    QHBoxLayout,
     QWidget,
     QFileDialog,
     QDialogButtonBox,
@@ -38,9 +45,11 @@ from PyQt5.QtWidgets import (
     QDialog, 
     QLabel,
     QWidget, 
-    QTableWidgetItem
+    QTableWidgetItem,
+    QSpacerItem
 )
 from PyQt5.uic import loadUi
+from waitingspinnerwidget import QtWaitingSpinner
 
 # Gestion des délais (pour la lecture)
 from time import sleep
@@ -58,7 +67,19 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
 # Gestion de l'importation avec OpenCV
-from extract import extract_images
+from extract import (extract_images, extract_infos)
+from webserver import (get_address, start_server)
+
+# Gestion des qrcodes
+import qrcode
+
+# Récupération du chemin absolu vers l'application
+from pathlib import Path
+
+if getattr(sys, 'frozen', False):
+    application_path = str(Path(os.path.dirname(os.path.realpath(sys.executable))))
+elif __file__:
+    application_path = str(Path(os.path.dirname(os.path.realpath(__file__))))
 
 
 # --------------------------------------------------   
@@ -73,8 +94,8 @@ class Window(QMainWindow):
         super().__init__()
 
         # Importation de l'interface de base
-        loadUi(resource_path('assets/main.ui'), self)
-        self.setWindowIcon(QIcon(resource_path('assets/icon.png')))
+        loadUi(resource_path('assets/ui/main.ui'), self)
+        self.setWindowIcon(QIcon(resource_path('assets/icons/icon.png')))
        
         # Initialisation des variables
         self.mesures = False
@@ -84,14 +105,15 @@ class Window(QMainWindow):
         self.images = []
         self.loupe = False
         self.newopen = False
-        self.version = "<b>ChronoPhys</b> est un logiciel gratuit pour réaliser des exploitations chronophotographiques en Sciences-Physiques<br><br><b>License Créative Commons</b> : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)<br><b>Auteur</b> : Thibault Giauffret, <a href=\"https://ensciences.fr\">ensciences.fr</a>(2022)<hr><b>Version</b> : dev-beta (01 mai 2022)<br><b>Bugs</b> : <a href=\"mailto:contact@ensciences.fr\">contact@ensciences.fr</a>"
+        self.webserver_running = False
+        self.version = "<b>ChronoPhys</b> est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques<br><br><b>License Créative Commons</b> : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)<br><b>Auteur</b> : Thibault Giauffret, <a href=\"https://ensciences.fr\">ensciences.fr</a>(2022)<hr><b>Version</b> : dev-beta v0.3 (04 mai 2022)<br><b>Bugs</b> : <a href=\"mailto:contact@ensciences.fr\">contact@ensciences.fr</a>"
 
         # Ajout du plot au canvas
-        figure = Figure()
-        self.sc = FigureCanvasQTAgg(figure)
-        figure.patch.set_facecolor("None")
-        figure.tight_layout()
-        self.sc.axes = figure.add_subplot(111)
+        self.figure = Figure()
+        self.sc = FigureCanvasQTAgg(self.figure)
+        self.figure.patch.set_facecolor("None")
+        self.figure.tight_layout(pad=0)
+        self.sc.axes = self.figure.add_subplot(111)
 
         # Gestion de la taille du plot
         sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -99,7 +121,7 @@ class Window(QMainWindow):
 
         # Affichage de l'image initiale
         self.sc.setStyleSheet("background-color:transparent;")
-        img = matplotlib.image.imread(resource_path('assets/stopwatch.png'))
+        img = matplotlib.image.imread(resource_path('assets/icons/stopwatch.png'))
         self.sc.axes.imshow(img, extent=[-img.shape[1]/2., img.shape[1]/2., -img.shape[0]/2., img.shape[0]/2. ])
         self.sc.axes.set_axis_off()
         self.sc.axes.margins(0)
@@ -112,6 +134,7 @@ class Window(QMainWindow):
         # Creation d'un widget contenant le canvas
         self.mainWidget= QWidget(self.mainGroup)
         self.sc.updateGeometry()
+        self.sc.setContentsMargins(0, 0, 0, 0)
         self.mainWidget.setLayout(layout)
         
         # Mise en arrière plan du canvas
@@ -120,48 +143,52 @@ class Window(QMainWindow):
         # Préparation des autres éléments de l'interface (activation, remplacement des libellés, utilisation d'icônes...)
         self.tabWidget.setTabEnabled(1, False);
         self.openButton.clicked.connect(self.video_open);
+        self.phoneButton.clicked.connect(self.smartphone_video_open);
         self.actionOuvrir_un_fichier_vid_o.triggered.connect(self.video_open)
+        self.actionEnregistrer_une_vid_o_avec_un_smartphone.triggered.connect(self.smartphone_video_open)
         self.loupeBox.hide()
 
 
         self.playButton.setText('')
-        self.playButton.setIcon(self.icon_from_svg(resource_path("assets/play.svg")))
+        self.playButton.setIcon(self.icon_from_svg(resource_path("assets/icons/play.svg")))
         self.pauseButton.setText('')
-        self.pauseButton.setIcon(self.icon_from_svg(resource_path("assets/pause.svg")))
+        self.pauseButton.setIcon(self.icon_from_svg(resource_path("assets/icons/pause.svg")))
         self.nextButton.setText('')
-        self.nextButton.setIcon(self.icon_from_svg(resource_path("assets/forward.svg")))
+        self.nextButton.setIcon(self.icon_from_svg(resource_path("assets/icons/forward.svg")))
         self.prevButton.setText('')
-        self.prevButton.setIcon(self.icon_from_svg(resource_path("assets/backward.svg")))
+        self.prevButton.setIcon(self.icon_from_svg(resource_path("assets/icons/backward.svg")))
         
-        img = QPixmap(resource_path("assets/video.svg"))
+        img = QPixmap(resource_path("assets/icons/video.svg"))
         qp = QPainter(img)
         qp.setCompositionMode(QPainter.CompositionMode_SourceIn)
         qp.fillRect( img.rect(), QColor(255,255,255))
         qp.end()
         self.openButton.setIcon(QIcon(img))
-            
-
-        self.saveButton.setText('')
-        self.saveButton.setStyleSheet("font-weight: bold;background-color:'#1b7a46';")
-        img = QPixmap(resource_path("assets/floppy-disk.svg"))
+        #self.openButton.setIcon(self.icon_from_svg(resource_path("assets/video.svg")))
+        
+        img = QPixmap(resource_path("assets/icons/mobile-signal-out.svg"))
         qp = QPainter(img)
         qp.setCompositionMode(QPainter.CompositionMode_SourceIn)
         qp.fillRect( img.rect(), QColor(255,255,255))
         qp.end()
-        self.saveButton.setIcon(QIcon(img))
+        self.phoneButton.setIcon(QIcon(img))
+
+        self.saveButton.setText('')
+        self.saveButton.setStyleSheet("font-weight: bold;background-color:'#1b7a46';")
+        self.saveButton.setIcon(self.icon_from_svg(resource_path("assets/icons/floppy-disk.svg")))
         self.loupeButton.setText('')
-        self.loupeButton.setIcon(self.icon_from_svg(resource_path("assets/magnifying-glass.svg")))
+        self.loupeButton.setIcon(self.icon_from_svg(resource_path("assets/icons/magnifying-glass.svg")))
         
-        self.validateButton.setIcon(self.icon_from_svg(resource_path("assets/circle-check.svg")))
-        self.rulerButton.setIcon(self.icon_from_svg(resource_path("assets/ruler-triangle.svg")))
-        self.repereButton.setIcon(self.icon_from_svg(resource_path("assets/bullseye-arrow.svg")))
-        self.formeButton.setIcon(self.icon_from_svg(resource_path("assets/paintbrush.svg")))
+        self.validateButton.setIcon(self.icon_from_svg(resource_path("assets/icons/circle-check.svg")))
+        self.rulerButton.setIcon(self.icon_from_svg(resource_path("assets/icons/ruler-triangle.svg")))
+        self.repereButton.setIcon(self.icon_from_svg(resource_path("assets/icons/bullseye-arrow.svg")))
+        self.formeButton.setIcon(self.icon_from_svg(resource_path("assets/icons/paintbrush.svg")))
         self.imageLabel.setText('')
 
-        self.axeButton_1.setIcon(self.icon_from_svg(resource_path("assets/axis1.svg")))
-        self.axeButton_3.setIcon(self.icon_from_svg(resource_path("assets/axis4.svg")))
-        self.axeButton_4.setIcon(self.icon_from_svg(resource_path("assets/axis2.svg")))
-        self.axeButton_5.setIcon(self.icon_from_svg(resource_path("assets/axis3.svg")))
+        self.axeButton_1.setIcon(self.icon_from_svg(resource_path("assets/icons/axis1.svg")))
+        self.axeButton_3.setIcon(self.icon_from_svg(resource_path("assets/icons/axis4.svg")))
+        self.axeButton_4.setIcon(self.icon_from_svg(resource_path("assets/icons/axis2.svg")))
+        self.axeButton_5.setIcon(self.icon_from_svg(resource_path("assets/icons/axis3.svg")))
 
         self.etalonBox.setEnabled(False)
         self.repereBox.setEnabled(False)
@@ -207,7 +234,7 @@ class Window(QMainWindow):
         self.label_ensciences.setPixmap(self.pixmap) 
         self.label_ensciences.resize(80,80) 
 
-        self.pixmap = QPixmap(resource_path("assets/icon.svg")).scaled(78, 78, Qt.KeepAspectRatio)
+        self.pixmap = QPixmap(resource_path("assets/icons/icon.svg")).scaled(78, 78, Qt.KeepAspectRatio)
         self.label_chrono.setPixmap(self.pixmap) 
         self.label_chrono.resize(80,80) 
 
@@ -215,7 +242,8 @@ class Window(QMainWindow):
         self.label_infos.setTextFormat(Qt.RichText)
 
         self.openButton.setStyleSheet("font-weight: bold;")
-        self.openButton.setIcon(self.icon_from_svg(resource_path("assets/video.svg")))
+        self.phoneButton.setStyleSheet("font-weight: bold;")
+        
 
         self.repereBox.setStyleSheet("QGroupBox {\n    border: 2px solid gray;\n    border-color: #155e36;\n    margin-top: 27px;\n    font-size: 14px;\n    border-bottom-left-radius: 0px;\n    border-bottom-right-radius: 0px;\n}\n\nQGroupBox::title {\n    subcontrol-origin: margin;\n    subcontrol-position: top center;\n    border-top-left-radius: 0px;\n    border-top-right-radius: 0px;\n    padding: 5px 150px;\n    background-color: #155e36;\n    color: rgb(255, 255, 255);\n}")
         self.repereBox.setEnabled(True)
@@ -231,6 +259,7 @@ class Window(QMainWindow):
 
         # Chargement dans le canvas de la première image de la vidéo
         self.sc.axes.cla()  # clear the axes content
+        self.figure.subplots_adjust(bottom=0, right=1, top=1, left=0)
         self.mywidth = self.images[self.current_image].shape[0]
         self.myheight = self.images[self.current_image].shape[1]
         self.Vaxis_orient = 1
@@ -258,7 +287,7 @@ class Window(QMainWindow):
 
         self.sc.axes.imshow(self.images[0], extent=[ -self.myheight*self.Vaxis_ratio, self.myheight*(1-self.Vaxis_ratio),-self.mywidth*self.Haxis_ratio, self.mywidth*(1-self.Haxis_ratio)])
         self.sc.axes.margins(0)
-        
+        self.sc.setContentsMargins(0, 0, 0, 0)
 
         self.sc.draw_idle()
 
@@ -320,26 +349,159 @@ class Window(QMainWindow):
         dialog.setDirectory(os.getenv('HOME'))
         if dialog.exec_():
             filename = dialog.selectedFiles()[0]
+            frame, camera_Width,camera_Height ,fps,frame_count,duration = extract_infos(str(filename))
             # print(filename)
-            self.images, self.videoConfig, error = extract_images(str(filename))
-            if error == False:
-                self.nb_images = self.videoConfig["nb_images"]
-                self.duration = self.videoConfig["duration"]
-                self.current_image = 0
-                #print(self.images[self.current_image])
-                self.imageLabel.setText('Image : '+str(self.current_image+1)+'/'+str(self.nb_images))
-                self.horizontalSlider.setValue(self.current_image+1)
-                self.t = array([None for i in range(self.nb_images)])
-                self.x = array([None for i in range(self.nb_images)])
-                self.y = array([None for i in range(self.nb_images)])
-                self.ui_update()
-                self.newopen = True
+            dlg = ImportDialog(frame,camera_Width,camera_Height ,fps,frame_count,duration )
+
+            if dlg.exec_() == QDialog.Accepted:
+
+                self.dlg_wait = WaitDialog()
+                
+                if self.dlg_wait.start():
+                    value = dlg.GetValue()
+                    
+
+                    # On crée le QThread object
+                    self.import_thread = QThread()
+                    self.import_thread.setTerminationEnabled(True)
+
+
+                    # On crée l'objet "Worker"
+                    self.import_worker = ImportWorker(filename, value)
+
+                    # On déplace le worker dans le thread
+                    self.import_worker.moveToThread(self.import_thread)
+
+                    # On connecte les signaux et les slots
+                    self.import_thread.started.connect(self.import_worker.run)
+                    self.import_worker.finished.connect(self.stop)
+                    self.import_worker.finished.connect(self.import_thread.quit)
+                    self.import_worker.finished.connect(self.import_worker.deleteLater)
+                    self.import_thread.finished.connect(self.import_thread.deleteLater)
+
+                    self.import_worker.data.connect(self.get_import_data)
+
+                    # On démarre le thread
+                    self.import_thread.start()
             else:
-                dlg = CustomDialog("Une erreur est survenue lors de l'ouverture de la vidéo. Assurez-vous qu'elle contienne moins de 150 images.")
-                if dlg.exec():
-                    print("Success!")
-                else:
-                    print("Cancel!")
+                print("Cancel!")
+
+    def get_import_data(self, images, videoConfig, error, video_timestamp):
+        self.dlg_wait.stop()
+        if error == False:
+            self.images = images
+            self.videoConfig = videoConfig
+            self.video_timestamp = video_timestamp
+            self.nb_images = self.videoConfig["nb_images"]
+            self.duration = self.videoConfig["duration"]
+            self.current_image = 0
+            #print(self.images[self.current_image])
+            self.imageLabel.setText('Image : '+str(self.current_image+1)+'/'+str(self.nb_images))
+            self.horizontalSlider.setValue(self.current_image+1)
+            self.t = array([None for i in range(self.nb_images)])
+            self.x = array([None for i in range(self.nb_images)])
+            self.y = array([None for i in range(self.nb_images)])
+            self.ui_update()
+            self.newopen = True
+        else:
+            dlg = CustomDialog("Une erreur est survenue lors de l'ouverture de la vidéo. Assurez-vous qu'elle contienne moins de 150 images.")
+            if dlg.exec():
+                print("Success!")
+            else:
+                print("Cancel!")
+
+            
+    # --------------------------------------------------   
+    # Gestion du serveur web (envie video depuis smartphone)
+    # --------------------------------------------------  
+
+    def smartphone_video_open(self):
+
+        address = get_address()
+
+        if self.webserver_running == False:
+            # On crée le QThread object
+            self.web_thread = QThread()
+            self.web_thread.setTerminationEnabled(True)
+
+            # On crée l'objet "Worker"
+            self.web_worker = WebWorker()
+
+            # On déplace le worker dans le thread
+            self.web_worker.moveToThread(self.web_thread)
+
+            # On connecte les signaux et les slots
+            self.web_thread.started.connect(self.web_worker.run)
+            self.web_worker.finished.connect(self.stop_webserver)
+            self.web_worker.finished.connect(self.web_thread.quit)
+            self.web_worker.finished.connect(self.web_worker.deleteLater)
+            self.web_thread.finished.connect(self.web_thread.deleteLater)
+
+            self.web_worker.video.connect(self.video_received)
+
+            # On démarre le thread
+            self.web_thread.start()
+
+            self.webserver_running = True
+
+        self.server_dlg = CustomDialog("<p style=\"font-size: 16px;\"><ul><li>Connecter le périphérique (smartphone, tablette...) sur le même réseau (wifi ou partage de connexion) que l'ordinateur executant ChronoPhys.</li><li>Scanner le QRCode suivant à l'aide du périphérique ou entrer l'adresse suivante dans le navigateur : <b>http://"+address+":8080<b></li><li>Suivre les instructions sur le périphérique.</li></ul><hr>Vous retrouverez les fichiers videos ici : <b>"+str(os.path.join(application_path ,  "videos_recues", ""))+"</b></p>", self.generate_qr())
+        if self.server_dlg.exec():
+            print("Success!")
+        else:
+            print("Cancel!")
+
+    def stop_webserver(self):
+        self.webserver_running = False
+
+    def video_received(self,filename):
+        filename = "./videos_recues/"+filename
+        dlg = CustomDialog("Une vidéo a été reçue, voulez-vous l'ouvrir ?")
+        if dlg.exec():
+            self.server_dlg.stop()
+            # print(filename)
+            frame, camera_Width,camera_Height ,fps,frame_count,duration = extract_infos(str(filename))
+            dlg2 = ImportDialog(frame,camera_Width,camera_Height ,fps,frame_count,duration )
+
+            if dlg2.exec_() == QDialog.Accepted:
+                self.dlg_wait = WaitDialog()
+                
+                if self.dlg_wait.start():
+                    value = dlg2.GetValue()
+                    
+                    # On crée le QThread object
+                    self.import_thread = QThread()
+                    self.import_thread.setTerminationEnabled(True)
+
+                    # On crée l'objet "Worker"
+                    self.import_worker = ImportWorker(filename, value)
+
+                    # On déplace le worker dans le thread
+                    self.import_worker.moveToThread(self.import_thread)
+
+                    # On connecte les signaux et les slots
+                    self.import_thread.started.connect(self.import_worker.run)
+                    self.import_worker.finished.connect(self.stop)
+                    self.import_worker.finished.connect(self.import_thread.quit)
+                    self.import_worker.finished.connect(self.import_worker.deleteLater)
+                    self.import_thread.finished.connect(self.import_thread.deleteLater)
+
+                    self.import_worker.data.connect(self.get_import_data)
+
+                    # On démarre le thread
+                    self.import_thread.start()
+                    
+            else:
+                print("Cancel!")
+        else:
+            print("Cancel!")
+
+    def generate_qr(self):
+        input_data = "http://"+get_address()+":8080"
+        qr = qrcode.QRCode(version=1, box_size=20, border=2)
+        qr.add_data(input_data)
+        qr.make(fit=True)
+        img = qr.make_image(fill='black', back_color='white')
+        return img
 
     # --------------------------------------------------   
     # Gestion des contrôles
@@ -555,10 +717,10 @@ class Window(QMainWindow):
         self.validateButton.setStyleSheet("font-weight: bold;color:'#fff'")
         if value == 1:
             self.etalonnage["status"] = "stage1"
-            print("Prise du premier point pour l'étalonnage")
+            #print("Prise du premier point pour l'étalonnage")
         elif value == 2:
             self.etalonnage["status"] = "stage2"
-            print("Prise du second point pour l'étalonnage")
+            #print("Prise du second point pour l'étalonnage")
 
     def ruler_clicked(self):
         if self.valeurEtalon.text() != "":
@@ -586,7 +748,7 @@ class Window(QMainWindow):
 
             self.etalonBox.setStyleSheet("QGroupBox {\n    border: 2px solid gray;\n    border-color: #FF17365D;\n    margin-top: 27px;\n    font-size: 14px;\n    border-bottom-left-radius: 0px;\n    border-bottom-right-radius: 0px;\n}\n\nQGroupBox::title {\n    subcontrol-origin: margin;\n    subcontrol-position: top center;\n    border-top-left-radius: 0px;\n    border-top-right-radius: 0px;\n    padding: 5px 150px;\n    background-color: #FF17365D;\n    color: rgb(255, 255, 255);\n}")
             self.validateButton.setStyleSheet("font-weight: bold;background-color:'#1b7a46';color:'#fff'")
-            img = QPixmap(resource_path("assets/circle-check.svg"))
+            img = QPixmap(resource_path("assets/icons/circle-check.svg"))
             qp = QPainter(img)
             qp.setCompositionMode(QPainter.CompositionMode_SourceIn)
             qp.fillRect( img.rect(), QColor(255,255,255))
@@ -691,7 +853,7 @@ class Window(QMainWindow):
     def table_update(self,i,xdata,ydata):
         # Ajout de la valeur de t dans la ligne correspondant à l'image
         self.item = QTableWidgetItem()
-        self.item.setText(str(round(i*self.duration/self.nb_images,3)))
+        self.item.setText(str(round(self.video_timestamp[self.current_image]/1000,3)))
         self.tableWidget.setItem(i, 0, self.item)
 
         # Ajout de la valeur de x dans la ligne correspondant à l'image
@@ -876,7 +1038,7 @@ class Window(QMainWindow):
         img = QPixmap(svg_filepath)
         qp = QPainter(img)
         qp.setCompositionMode(QPainter.CompositionMode_SourceIn)
-        qp.fillRect( img.rect(), self.label_3.palette().color(QPalette.Foreground) )
+        qp.fillRect( img.rect(), self.label_8.palette().color(QPalette.Foreground) )
         qp.end()
         return QIcon(img)
 
@@ -974,7 +1136,7 @@ class Window(QMainWindow):
 
     def closeEvent(self, event):
         dlg = CustomDialog("Voulez-vous vraiment quitter ?")
-        if dlg.exec():
+        if dlg.exec_():
             event.accept() # let the window close
         else:
             event.ignore()
@@ -983,10 +1145,11 @@ class Window(QMainWindow):
 # Classe pour les boîtes de dialogue simples
 # -------------------------------------------------- 
 class CustomDialog(QDialog):
-    def __init__(self, themessage):
+    def __init__(self, themessage, qrcode=None):
         super().__init__()
 
         self.setWindowTitle("Message")
+        
 
         QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
 
@@ -995,11 +1158,217 @@ class CustomDialog(QDialog):
         self.buttonBox.rejected.connect(self.reject)
 
         self.layout = QVBoxLayout()
+        self.mainlayout = QHBoxLayout()
+        self.mainwidget = QWidget()
+
         message = QLabel(themessage)
         message.setTextFormat(Qt.RichText)
-        self.layout.addWidget(message)
+        message.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        
+
+        if qrcode != None:
+            message.setWordWrap(True)
+            label_qr = QLabel()
+            pixmap = self.pil2pixmap(qrcode).scaled(150, 150, Qt.KeepAspectRatio)
+            label_qr.setPixmap(pixmap) 
+            label_qr.resize(150,150) 
+            self.mainlayout.addWidget(label_qr)
+
+            message.setStyleSheet("padding :15px")
+        
+        
+        self.mainlayout.addWidget(message)
+        self.mainwidget.setLayout(self.mainlayout)
+        self.layout.addWidget(self.mainwidget)
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
+
+    def pil2pixmap(self, im):
+        im2 = im.convert("RGBA")
+        data = im2.tobytes("raw", "RGBA")
+        qim = QImage(data, im.size[0], im.size[1], QImage.Format_ARGB32)
+        pixmap = QPixmap.fromImage(qim)
+        return pixmap
+
+    def stop(self):
+        self.done(0)
+
+
+class WaitDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Importation en cours...")
+        self.setFixedSize(200, 100)
+
+        self.layout = QVBoxLayout()
+
+        message = QLabel("Importation en cours...")
+        message.setAlignment(Qt.AlignCenter)
+
+        spinner = QtWaitingSpinner(self)
+
+        spinner.setRoundness(70.0)
+        spinner.setMinimumTrailOpacity(15.0)
+        spinner.setTrailFadePercentage(70.0)
+        spinner.setNumberOfLines(12)
+        spinner.setLineLength(10)
+        spinner.setLineWidth(5)
+        spinner.setInnerRadius(10)
+        spinner.setRevolutionsPerSecond(1)
+        spinner.setColor(message.palette().color(QPalette.Foreground))
+
+        verticalSpacer = QSpacerItem(20, 50, QSizePolicy.Minimum, QSizePolicy.Fixed)
+
+        self.layout.addWidget(message)
+        self.layout.addItem(verticalSpacer)
+        self.layout.addWidget(spinner)
+        self.setLayout(self.layout)
+
+        spinner.start()
+  
+
+    def start(self):
+        self.setWindowModality(Qt.ApplicationModal)
+        self.show()
+        return True
+
+    def stop(self):
+        self.done(0)
+
+    def closeEvent(self, evnt):
+        evnt.ignore()
+
+
+class ImportDialog(QDialog):
+    def __init__(self,frame,camera_Width,camera_Height ,fps,frame_count,duration):
+        super().__init__()
+
+        self.frame = frame
+        self.duration = duration
+        self.frame_count = frame_count
+        self.camera_Width = camera_Width
+        self.camera_Height = camera_Height
+
+        self.newframe_count = self.frame_count
+        self.newcamera_Width = self.camera_Width
+        self.newcamera_Height = self.camera_Height
+
+        loadUi(resource_path('assets/ui/import.ui'), self)
+        self.setWindowTitle("Importation d'une vidéo")
+
+        self.right_btn.setIcon(self.icon_from_svg(resource_path("assets/icons/arrow-rotate-right.svg")))
+        self.left_btn.setIcon(self.icon_from_svg(resource_path("assets/icons/arrow-rotate-left.svg")))
+
+        self.img = QImage(frame, frame.shape[1], frame.shape[0], frame.shape[1] * 3,QImage.Format_RGB888)
+        pixmap = QPixmap(self.img).scaled(200, 200,Qt.KeepAspectRatio, Qt.FastTransformation)
+        self.img_label.setPixmap(pixmap)
+        self.rotation = 0
+
+        self.left_btn.clicked.connect(lambda : self.rotate(-90));
+        self.right_btn.clicked.connect(lambda : self.rotate(90));
+
+        self.largeur_ref.setText(str(camera_Width))
+        self.hauteur_ref.setText(str(camera_Height))
+        self.images_ref.setText(str(self.frame_count))
+        self.duree_ref.setText(str(round(self.duration,2)))
+        self.duree_perso.setText(str(round(self.duration,2)))
+        self.fps_ref.setText(str(round(fps,2)))
+        self.fps_perso.setText(str(round(fps,2)))
+
+        self.onlyInt = QIntValidator()
+        self.onlyInt .setLocale(QLocale("en_US"))
+        self.largeur_perso.setValidator(self.onlyInt)
+        self.hauteur_perso.setValidator(self.onlyInt)
+        self.images_perso.setValidator(self.onlyInt)
+
+        self.largeur_perso.setText(str(camera_Width))
+        self.hauteur_perso.setText(str(camera_Height))
+        self.images_perso.setText(str(self.frame_count))
+
+        self.images_perso.textChanged.connect(self.calculate_fps)
+        self.largeur_perso.textChanged.connect(self.largeur_test)
+        self.hauteur_perso.textChanged.connect(self.hauteur_test)
+
+        self.btn_apply = self.buttonBox.button(QDialogButtonBox.Ok)
+
+        if self.frame_count > 150:
+            self.images_perso.setStyleSheet("background-color:'#880000';")
+            self.newframe_count = 0
+        self.check_state()
+
+    def calculate_fps(self, string):
+        if string == '' or int(string) > self.frame_count or int(string) > 150:
+            self.fps_perso.setText("-")
+            self.images_perso.setStyleSheet("background-color:'#880000';")
+            self.newframe_count = 0
+        else :
+            self.fps_perso.setText(str(round(int(string)/self.duration,2)))
+            self.images_perso.setStyleSheet("")
+            self.newframe_count = int(string)
+        self.check_state()
+
+    def largeur_test(self, string):
+        if string == '' or int(string) > self.camera_Width:
+            self.largeur_perso.setStyleSheet("background-color:'#880000';")
+            self.newcamera_Width = 0
+        else :
+            self.largeur_perso.setStyleSheet("")
+            self.newcamera_Width = int(string)
+        self.check_state()
+    
+    def hauteur_test(self, string):
+        if string == '' or int(string) > self.camera_Height:
+            self.hauteur_perso.setStyleSheet("background-color:'#880000';")
+            self.newcamera_Height = 0
+        else :
+            self.hauteur_perso.setStyleSheet("")
+            self.newcamera_Height = int(string)
+        self.check_state()
+
+    def check_state(self):
+        if self.newcamera_Height != 0 and self.newcamera_Width  != 0 and self.newframe_count != 0:
+            self.btn_apply.setEnabled(True)
+        else :
+            self.btn_apply.setEnabled(False)
+
+    def rotate(self, rot):
+        my_transform = QTransform()
+        my_transform.rotate(rot)
+        self.img = self.img.transformed(my_transform)
+        pixmap = QPixmap(self.img).scaled(200, 200,Qt.KeepAspectRatio, Qt.FastTransformation)
+        self.img_label.setPixmap(pixmap)
+        self.rotation += rot
+        if self.rotation == 270:
+            self.rotation = -90
+        elif self.rotation == 360 or self.rotation == -360:
+            self.rotation = 0
+        elif self.rotation == -180:
+            self.rotation = 180
+        elif self.rotation == -270:
+            self.rotation = 90
+
+        #print(self.rotation)
+
+    def icon_from_svg(self,svg_filepath):
+        img = QPixmap(svg_filepath)
+        qp = QPainter(img)
+        qp.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        qp.fillRect( img.rect(), self.label.palette().color(QPalette.Foreground) )
+        qp.end()
+        return QIcon(img)
+
+    def GetValue(self):
+        if self.newcamera_Height != 0 and self.newcamera_Width  != 0 and self.newframe_count != 0:
+            return (self.newcamera_Width,self.newcamera_Height, self.newframe_count, self.rotation    )                                                        
+
+
+
+    # def closeEvent(self, evnt):
+    #     if self.newcamera_Height != 0 and self.newcamera_Width  != 0 and self.newframe_count != 0:
+    #         super().closeEvent(evnt)
+    #     else:
+    #         evnt.ignore()
 
 # --------------------------------------------------   
 # Classe Worker exécutant la lecture dans un thread
@@ -1060,6 +1429,58 @@ class Worker(QObject):
             sleep(0.3)
             if self.threadactive != True:
                 break
+        self.threadactive = False
+        self.finished.emit()
+
+    def stop(self):
+        self.threadactive = False
+        self.finished.emit()
+        print("Worker stop")
+
+
+# --------------------------------------------------   
+# Classe Worker exécutant la lecture dans un thread
+# -------------------------------------------------- 
+
+# On crée le thread secondaire
+class ImportWorker(QObject):
+    finished = pyqtSignal()
+    data = pyqtSignal(list,dict,bool,list)
+
+    def __init__(self, filename, value, parent=None):
+        super(ImportWorker, self).__init__(parent)
+        self.filename = filename
+        self.value = value
+
+    def run(self):
+
+        self.images, self.videoConfig, error, self.video_timestamp = extract_images(str(self.filename),self.value)
+
+        self.data.emit(self.images, self.videoConfig, error, self.video_timestamp)
+        self.finished.emit()
+
+    def stop(self):
+        self.finished.emit()
+        print("Worker stop")
+
+# --------------------------------------------------   
+# Classe WebWorker exécutant le serveur web dans un thread
+# -------------------------------------------------- 
+
+# On crée le thread secondaire
+class WebWorker(QObject):
+    finished = pyqtSignal()
+    video = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super(WebWorker, self).__init__(parent)
+
+        self.threadactive=True
+
+    def run(self):
+
+        start_server(self)
+        
         self.threadactive = False
         self.finished.emit()
 
