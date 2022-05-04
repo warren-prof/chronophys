@@ -164,7 +164,7 @@ class Window(QMainWindow):
         qp.fillRect( img.rect(), QColor(255,255,255))
         qp.end()
         self.openButton.setIcon(QIcon(img))
-        #self.openButton.setIcon(self.icon_from_svg(resource_path("assets/video.svg")))
+        #self.openButton.setIcon(self.icon_from_svg(resource_path("assets/icons/video.svg")))
         
         img = QPixmap(resource_path("assets/icons/mobile-signal-out.svg"))
         qp = QPainter(img)
@@ -172,10 +172,17 @@ class Window(QMainWindow):
         qp.fillRect( img.rect(), QColor(255,255,255))
         qp.end()
         self.phoneButton.setIcon(QIcon(img))
+        #self.phoneButton.setIcon(self.icon_from_svg(resource_path("assets/icons/mobile-signal-out.svg")))
 
         self.saveButton.setText('')
         self.saveButton.setStyleSheet("font-weight: bold;background-color:'#1b7a46';")
-        self.saveButton.setIcon(self.icon_from_svg(resource_path("assets/icons/floppy-disk.svg")))
+        img = QPixmap(resource_path("assets/icons/floppy-disk.svg"))
+        qp = QPainter(img)
+        qp.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        qp.fillRect( img.rect(), QColor(255,255,255))
+        qp.end()
+        self.saveButton.setIcon(QIcon(img))
+        #self.saveButton.setIcon(self.icon_from_svg(resource_path("assets/icons/floppy-disk.svg")))
         self.loupeButton.setText('')
         self.loupeButton.setIcon(self.icon_from_svg(resource_path("assets/icons/magnifying-glass.svg")))
         
@@ -243,6 +250,8 @@ class Window(QMainWindow):
 
         self.openButton.setStyleSheet("font-weight: bold;")
         self.phoneButton.setStyleSheet("font-weight: bold;")
+        self.openButton.setIcon(self.icon_from_svg(resource_path("assets/icons/video.svg")))
+        self.phoneButton.setIcon(self.icon_from_svg(resource_path("assets/icons/mobile-signal-out.svg")))
         
 
         self.repereBox.setStyleSheet("QGroupBox {\n    border: 2px solid gray;\n    border-color: #155e36;\n    margin-top: 27px;\n    font-size: 14px;\n    border-bottom-left-radius: 0px;\n    border-bottom-right-radius: 0px;\n}\n\nQGroupBox::title {\n    subcontrol-origin: margin;\n    subcontrol-position: top center;\n    border-top-left-radius: 0px;\n    border-top-right-radius: 0px;\n    padding: 5px 150px;\n    background-color: #155e36;\n    color: rgb(255, 255, 255);\n}")
@@ -714,7 +723,7 @@ class Window(QMainWindow):
         except:
             print("An exception occurred") 
         self.clickEvent = self.sc.mpl_connect('button_press_event',self.etalon_event)
-        self.validateButton.setStyleSheet("font-weight: bold;color:'#fff'")
+        #self.validateButton.setStyleSheet("font-weight: bold;color:'#fff'")
         if value == 1:
             self.etalonnage["status"] = "stage1"
             #print("Prise du premier point pour l'étalonnage")
