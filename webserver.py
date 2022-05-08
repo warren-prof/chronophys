@@ -11,7 +11,7 @@ def get_address() :
 
 def start_server(self):
     local_ip_address = get_address()
-    FOLDER = 'videos_recues'
+    FOLDER = 'videos'
     os.makedirs(FOLDER, exist_ok=True)
 
     app = Flask(__name__)

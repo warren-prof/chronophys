@@ -1,5 +1,7 @@
 from cv2 import (
     VideoCapture,
+    VideoWriter,
+    VideoWriter_fourcc,
     resize,
     CAP_PROP_FRAME_WIDTH,
     CAP_PROP_FRAME_HEIGHT,
@@ -13,8 +15,17 @@ from cv2 import (
     ROTATE_90_COUNTERCLOCKWISE,
     ROTATE_90_CLOCKWISE,
     ROTATE_180,
-    rotate
+    rotate,
+    flip,
+    CAP_PROP_EXPOSURE,
+    CAP_PROP_AUTO_EXPOSURE
 )
+
+from datetime import datetime
+import os, sys
+
+from numpy import log as ln
+
 def extract_infos(video_file):
     video_capture = VideoCapture(video_file)
     camera_Width  = int(video_capture.get(CAP_PROP_FRAME_WIDTH))  
@@ -29,9 +40,9 @@ def extract_infos(video_file):
 
     video_capture.set(CAP_PROP_POS_FRAMES, 0) 
     ret, frameOrig = video_capture.read()
-    frame = cvtColor(frameOrig, COLOR_BGR2RGB)
-
-    return frame,camera_Width,camera_Height ,fps,frame_count,duration
+    if ret:
+        frame = cvtColor(frameOrig, COLOR_BGR2RGB)
+        return frame,camera_Width,camera_Height ,fps,frame_count,duration
 
     
 def extract_images(video_file,settings_perso): 
@@ -103,3 +114,82 @@ def extract_images(video_file,settings_perso):
         settings["width"] = frameSize[0]
         settings["height"] = frameSize[1]
         return images, settings, error, mytime
+
+def webcam_init(camera_id, width=None, height=None, exposition=None):
+    cap = VideoCapture(camera_id)
+    ret_val , cap_for_exposure = cap.read()
+    print(cap.get(CAP_PROP_EXPOSURE))
+    print(cap.get(CAP_PROP_AUTO_EXPOSURE))
+    if width!=None and height!=None and exposition!=None:
+        cap.set(CAP_PROP_FRAME_HEIGHT, height)
+        cap.set(CAP_PROP_FRAME_WIDTH,  width)
+        cap.set(CAP_PROP_AUTO_EXPOSURE, 3) # D'abord mode auto
+        cap.set(CAP_PROP_AUTO_EXPOSURE, 1) # puis mode manuel
+        if sys.platform == "win32":
+            cap.set(CAP_PROP_EXPOSURE, round(ln(exposition*0.001)/ln(2),2)) # On convertit l'exposition, sous windows : 2^-5 = 30 ms
+        else:
+            cap.set(CAP_PROP_EXPOSURE, exposition) 
+        fps = cap.get(CAP_PROP_FPS)
+        res_height = cap.get(CAP_PROP_FRAME_HEIGHT)
+        res_width = cap.get(CAP_PROP_FRAME_WIDTH)
+    else:
+        cap.set(CAP_PROP_AUTO_EXPOSURE, 3)
+        fps = cap.get(CAP_PROP_FPS)
+        res_height = cap.get(CAP_PROP_FRAME_HEIGHT)
+        res_width = cap.get(CAP_PROP_FRAME_WIDTH)
+        exposition = cap.get(CAP_PROP_EXPOSURE)
+        if sys.platform == "win32":
+            exposition = 2**exposition*1000
+    return cap, fps, res_width, res_height, exposition
+
+def webcam_get_image(cap):
+    ret, image = cap.read()
+    if ret != False:
+        image = flip(image, 1)
+    return ret, image
+
+def webcam_init_capture(fps, application_path, width, height):
+    now = datetime.now()
+
+    dt_string = now.strftime("%d%m%Y_%H_%M_%S")
+    fourcc = VideoWriter_fourcc(*'MJPG')
+    path = str(os.path.join(application_path,'videos','WebcamVid_'+dt_string+'.avi'))
+    print(path)
+    out1 = VideoWriter(path, apiPreference = 0, fourcc = fourcc, fps = fps, frameSize =(int(width),int(height)))
+    return out1, path
+
+def webcam_write_image(out1, image):
+    out1.write(image)
+
+def webcam_end_capture(out1):
+    out1.release()
+
+def release_cap(cap):
+    if cap != None:
+        cap.release()
+
+def list_webcam_ports():
+
+    non_working_ports = []
+    dev_port = 0
+    working_ports = []
+    available_ports = []
+    while len(non_working_ports) < 3:
+        camera = VideoCapture(dev_port)
+        if not camera.isOpened():
+            non_working_ports.append(dev_port)
+            print("Port %s is not working." %dev_port)
+        else:
+            is_reading, img = camera.read()
+            w = camera.get(3)
+            h = camera.get(4)
+            if is_reading:
+                print("Port %s is working and reads images (%s x %s)" %(dev_port,h,w))
+                working_ports.append(dev_port)
+            else:
+                print("Port %s for camera ( %s x %s) is present but does not reads." %(dev_port,h,w))
+                available_ports.append(dev_port)
+        dev_port +=1
+    print(working_ports)
+    return working_ports
+        

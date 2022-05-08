@@ -1,23 +1,25 @@
 # ChronoPhys est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques
 # License Créative Commons : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)
 # Auteur : Thibault Giauffret, ensciences.fr (2022)
-# Version : dev-beta v0.3 (04 mai 2022)
+# Version : dev-beta v0.4 (08 mai 2022)
 
 
 # --------------------------------------------------   
 # Importation des librairies
 # -------------------------------------------------- 
-import sys, os, csv
+import sys, os, csv, time, subprocess
 
 # Gestion de l'interface
 from PyQt5.QtCore import (
     QObject,
     pyqtSignal,
+    pyqtSlot,
     QLocale,
     QRect,
     QPoint,
     QThread,
-    Qt
+    Qt,
+    QTimer
 )
 from PyQt5.QtGui import (
     QIcon,
@@ -67,7 +69,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
 # Gestion de l'importation avec OpenCV
-from extract import (extract_images, extract_infos)
+from extract import (extract_images, extract_infos, webcam_init, webcam_get_image, webcam_init_capture, webcam_write_image, webcam_end_capture, list_webcam_ports, release_cap)
 from webserver import (get_address, start_server)
 
 # Gestion des qrcodes
@@ -106,7 +108,7 @@ class Window(QMainWindow):
         self.loupe = False
         self.newopen = False
         self.webserver_running = False
-        self.version = "<b>ChronoPhys</b> est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques<br><br><b>License Créative Commons</b> : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)<br><b>Auteur</b> : Thibault Giauffret, <a href=\"https://ensciences.fr\">ensciences.fr</a>(2022)<hr><b>Version</b> : dev-beta v0.3 (04 mai 2022)<br><b>Bugs</b> : <a href=\"mailto:contact@ensciences.fr\">contact@ensciences.fr</a>"
+        self.version = "<b>ChronoPhys</b> est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques<br><br><b>License Créative Commons</b> : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)<br><b>Auteur</b> : Thibault Giauffret, <a href=\"https://ensciences.fr\">ensciences.fr</a>(2022)<hr><b>Version</b> : dev-beta v0.4 (08 mai 2022)<br><b>Bugs</b> : <a href=\"mailto:contact@ensciences.fr\">contact@ensciences.fr</a>"
 
         # Ajout du plot au canvas
         self.figure = Figure()
@@ -144,8 +146,10 @@ class Window(QMainWindow):
         self.tabWidget.setTabEnabled(1, False);
         self.openButton.clicked.connect(self.video_open);
         self.phoneButton.clicked.connect(self.smartphone_video_open);
+        self.webcamButton.clicked.connect(self.webcam_video_open);
         self.actionOuvrir_un_fichier_vid_o.triggered.connect(self.video_open)
         self.actionEnregistrer_une_vid_o_avec_un_smartphone.triggered.connect(self.smartphone_video_open)
+        self.actionEnregistrer_une_vid_o_avec_la_webcam.triggered.connect(self.webcam_video_open)
         self.loupeBox.hide()
 
 
@@ -165,6 +169,14 @@ class Window(QMainWindow):
         qp.end()
         self.openButton.setIcon(QIcon(img))
         #self.openButton.setIcon(self.icon_from_svg(resource_path("assets/icons/video.svg")))
+
+        img = QPixmap(resource_path("assets/icons/camera-security.svg"))
+        qp = QPainter(img)
+        qp.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        qp.fillRect( img.rect(), QColor(255,255,255))
+        qp.end()
+        self.webcamButton.setIcon(QIcon(img))
+        #self.webcamButton.setIcon(self.icon_from_svg(resource_path("assets/icons/camera-security.svg")))
         
         img = QPixmap(resource_path("assets/icons/mobile-signal-out.svg"))
         qp = QPainter(img)
@@ -250,8 +262,10 @@ class Window(QMainWindow):
 
         self.openButton.setStyleSheet("font-weight: bold;")
         self.phoneButton.setStyleSheet("font-weight: bold;")
+        self.webcamButton.setStyleSheet("font-weight: bold;")
         self.openButton.setIcon(self.icon_from_svg(resource_path("assets/icons/video.svg")))
         self.phoneButton.setIcon(self.icon_from_svg(resource_path("assets/icons/mobile-signal-out.svg")))
+        self.webcamButton.setIcon(self.icon_from_svg(resource_path("assets/icons/camera-security.svg")))
         
 
         self.repereBox.setStyleSheet("QGroupBox {\n    border: 2px solid gray;\n    border-color: #155e36;\n    margin-top: 27px;\n    font-size: 14px;\n    border-bottom-left-radius: 0px;\n    border-bottom-right-radius: 0px;\n}\n\nQGroupBox::title {\n    subcontrol-origin: margin;\n    subcontrol-position: top center;\n    border-top-left-radius: 0px;\n    border-top-right-radius: 0px;\n    padding: 5px 150px;\n    background-color: #155e36;\n    color: rgb(255, 255, 255);\n}")
@@ -358,42 +372,7 @@ class Window(QMainWindow):
         dialog.setDirectory(os.getenv('HOME'))
         if dialog.exec_():
             filename = dialog.selectedFiles()[0]
-            frame, camera_Width,camera_Height ,fps,frame_count,duration = extract_infos(str(filename))
-            # print(filename)
-            dlg = ImportDialog(frame,camera_Width,camera_Height ,fps,frame_count,duration )
-
-            if dlg.exec_() == QDialog.Accepted:
-
-                self.dlg_wait = WaitDialog()
-                
-                if self.dlg_wait.start():
-                    value = dlg.GetValue()
-                    
-
-                    # On crée le QThread object
-                    self.import_thread = QThread()
-                    self.import_thread.setTerminationEnabled(True)
-
-
-                    # On crée l'objet "Worker"
-                    self.import_worker = ImportWorker(filename, value)
-
-                    # On déplace le worker dans le thread
-                    self.import_worker.moveToThread(self.import_thread)
-
-                    # On connecte les signaux et les slots
-                    self.import_thread.started.connect(self.import_worker.run)
-                    self.import_worker.finished.connect(self.stop)
-                    self.import_worker.finished.connect(self.import_thread.quit)
-                    self.import_worker.finished.connect(self.import_worker.deleteLater)
-                    self.import_thread.finished.connect(self.import_thread.deleteLater)
-
-                    self.import_worker.data.connect(self.get_import_data)
-
-                    # On démarre le thread
-                    self.import_thread.start()
-            else:
-                print("Cancel!")
+            self.import_video(filename)
 
     def get_import_data(self, images, videoConfig, error, video_timestamp):
         self.dlg_wait.stop()
@@ -426,7 +405,6 @@ class Window(QMainWindow):
 
     def smartphone_video_open(self):
 
-        address = get_address()
 
         if self.webserver_running == False:
             # On crée le QThread object
@@ -453,7 +431,7 @@ class Window(QMainWindow):
 
             self.webserver_running = True
 
-        self.server_dlg = CustomDialog("<p style=\"font-size: 16px;\"><ul><li>Connecter le périphérique (smartphone, tablette...) sur le même réseau (wifi ou partage de connexion) que l'ordinateur executant ChronoPhys.</li><li>Scanner le QRCode suivant à l'aide du périphérique ou entrer l'adresse suivante dans le navigateur : <b>http://"+address+":8080<b></li><li>Suivre les instructions sur le périphérique.</li></ul><hr>Vous retrouverez les fichiers videos ici : <b>"+str(os.path.join(application_path ,  "videos_recues", ""))+"</b></p>", self.generate_qr())
+        self.server_dlg = WebDialog()
         if self.server_dlg.exec():
             print("Success!")
         else:
@@ -463,54 +441,66 @@ class Window(QMainWindow):
         self.webserver_running = False
 
     def video_received(self,filename):
-        filename = "./videos_recues/"+filename
+        filename = "./videos/"+filename
         dlg = CustomDialog("Une vidéo a été reçue, voulez-vous l'ouvrir ?")
         if dlg.exec():
             self.server_dlg.stop()
-            # print(filename)
-            frame, camera_Width,camera_Height ,fps,frame_count,duration = extract_infos(str(filename))
-            dlg2 = ImportDialog(frame,camera_Width,camera_Height ,fps,frame_count,duration )
-
-            if dlg2.exec_() == QDialog.Accepted:
-                self.dlg_wait = WaitDialog()
-                
-                if self.dlg_wait.start():
-                    value = dlg2.GetValue()
-                    
-                    # On crée le QThread object
-                    self.import_thread = QThread()
-                    self.import_thread.setTerminationEnabled(True)
-
-                    # On crée l'objet "Worker"
-                    self.import_worker = ImportWorker(filename, value)
-
-                    # On déplace le worker dans le thread
-                    self.import_worker.moveToThread(self.import_thread)
-
-                    # On connecte les signaux et les slots
-                    self.import_thread.started.connect(self.import_worker.run)
-                    self.import_worker.finished.connect(self.stop)
-                    self.import_worker.finished.connect(self.import_thread.quit)
-                    self.import_worker.finished.connect(self.import_worker.deleteLater)
-                    self.import_thread.finished.connect(self.import_thread.deleteLater)
-
-                    self.import_worker.data.connect(self.get_import_data)
-
-                    # On démarre le thread
-                    self.import_thread.start()
-                    
-            else:
-                print("Cancel!")
+            self.import_video(filename)
+            
         else:
             print("Cancel!")
 
-    def generate_qr(self):
-        input_data = "http://"+get_address()+":8080"
-        qr = qrcode.QRCode(version=1, box_size=20, border=2)
-        qr.add_data(input_data)
-        qr.make(fit=True)
-        img = qr.make_image(fill='black', back_color='white')
-        return img
+    def import_video(self, filename):
+        frame, camera_Width,camera_Height ,fps,frame_count,duration = extract_infos(str(filename))
+        dlg2 = ImportDialog(frame,camera_Width,camera_Height ,fps,frame_count,duration )
+
+        if dlg2.exec_() == QDialog.Accepted:
+            self.dlg_wait = WaitDialog()
+            
+            if self.dlg_wait.start():
+                value = dlg2.GetValue()
+                
+                # On crée le QThread object
+                self.import_thread = QThread()
+                self.import_thread.setTerminationEnabled(True)
+
+                # On crée l'objet "Worker"
+                self.import_worker = ImportWorker(filename, value)
+
+                # On déplace le worker dans le thread
+                self.import_worker.moveToThread(self.import_thread)
+
+                # On connecte les signaux et les slots
+                self.import_thread.started.connect(self.import_worker.run)
+                self.import_worker.finished.connect(self.stop)
+                self.import_worker.finished.connect(self.import_thread.quit)
+                self.import_worker.finished.connect(self.import_worker.deleteLater)
+                self.import_thread.finished.connect(self.import_thread.deleteLater)
+
+                self.import_worker.data.connect(self.get_import_data)
+
+                # On démarre le thread
+                self.import_thread.start()
+                
+        else:
+            print("Cancel!")
+
+
+    # --------------------------------------------------   
+    # Gestion de la webcam
+    # --------------------------------------------------  
+    def webcam_video_open(self):
+
+        self.webcam_dlg = WebcamDialog()
+        if self.webcam_dlg.exec():
+            print("Success!")
+            self.webcam_dlg.release()
+            if self.webcam_dlg.recordDone == True:
+                self.import_video(self.webcam_dlg.video_path)
+        else:
+            print("Cancel!")
+            self.webcam_dlg.release()
+
 
     # --------------------------------------------------   
     # Gestion des contrôles
@@ -742,6 +732,9 @@ class Window(QMainWindow):
 
             self.styleBox.setEnabled(True)
             self.valeurEtalon.setStyleSheet("")
+            if self.etalonnage["done"] == True:
+                self.etalonnage["old_valeurMetres"] = self.etalonnage["valeurMetres"]
+                self.etalonnage["old_valeurPixels"] = self.etalonnage["valeurPixels"]
             self.etalonnage["valeurMetres"] = float(self.valeurEtalon.text().replace(',','.'))
             self.etalonnage["valeurPixels"] = ((self.etalonnage["x1"]-self.etalonnage["x2"])**2+(self.etalonnage["y1"]-self.etalonnage["y2"])**2)**(1/2)
             self.etalonnage["done"] = True
@@ -763,7 +756,7 @@ class Window(QMainWindow):
             qp.fillRect( img.rect(), QColor(255,255,255))
             qp.end()
             self.validateButton.setIcon(QIcon(img))
-            
+            self.table_update_etalon()
 
             self.canvas_update()
         else :
@@ -874,6 +867,19 @@ class Window(QMainWindow):
         self.item = QTableWidgetItem()
         self.item.setText(str(round(ydata*self.etalonnage["valeurMetres"]/self.etalonnage["valeurPixels"],3)))
         self.tableWidget.setItem(i, 2, self.item)
+
+    def table_update_etalon(self):
+        if "old_valeurMetres" in self.etalonnage:
+            for row in range(self.tableWidget.rowCount()):
+                x_item = self.tableWidget.item(row, 1)
+                y_item = self.tableWidget.item(row, 2)
+                if x_item is not None and y_item is not None:
+                    x_value = round(float(x_item.text())*self.etalonnage["valeurMetres"]*self.etalonnage["old_valeurPixels"]/(self.etalonnage["valeurPixels"]*self.etalonnage["old_valeurMetres"]),3)
+                    y_value = round(float(y_item.text())*self.etalonnage["valeurMetres"]*self.etalonnage["old_valeurPixels"]/(self.etalonnage["valeurPixels"]*self.etalonnage["old_valeurMetres"]),3)
+                    self.tableWidget.item(row, 1).setText(str(x_value))
+                    self.tableWidget.item(row, 2).setText(str(y_value))
+
+
 
     def table_clicked(self,item):
         self.tableWidget.itemChanged.connect(lambda : self.table_changed(item))
@@ -1173,24 +1179,54 @@ class CustomDialog(QDialog):
         message = QLabel(themessage)
         message.setTextFormat(Qt.RichText)
         message.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        
-
-        if qrcode != None:
-            message.setWordWrap(True)
-            label_qr = QLabel()
-            pixmap = self.pil2pixmap(qrcode).scaled(150, 150, Qt.KeepAspectRatio)
-            label_qr.setPixmap(pixmap) 
-            label_qr.resize(150,150) 
-            self.mainlayout.addWidget(label_qr)
-
-            message.setStyleSheet("padding :15px")
-        
-        
+           
         self.mainlayout.addWidget(message)
         self.mainwidget.setLayout(self.mainlayout)
         self.layout.addWidget(self.mainwidget)
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
+
+
+    def stop(self):
+        self.done(0)
+
+# --------------------------------------------------   
+# Classe pour les boîtes de dialogue simples
+# -------------------------------------------------- 
+class WebDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+
+        loadUi(resource_path('assets/ui/webserver.ui'), self)
+        self.setWindowTitle("Importation depuis un smartphone")
+        
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+
+        address = get_address()
+
+        self.instructions = "<p style=\"font-size: 16px;\"><ul><li>Connecter le périphérique (smartphone, tablette...) sur le même réseau (wifi ou partage de connexion) que l'ordinateur executant ChronoPhys.</li><li>Scanner le QRCode suivant à l'aide du périphérique ou entrer l'adresse suivante dans le navigateur : <b>http://"+address+":8080<b></li><li>Suivre les instructions sur le périphérique.</li></ul><hr>Vous retrouverez les fichiers videos ici : <b>"+str(os.path.join(application_path ,  "videos", ""))+"</b></p>"
+        self.message.setText(self.instructions)
+
+        self.message.setTextFormat(Qt.RichText)
+        self.message.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.message.setStyleSheet("padding :15px")
+      
+        self.message.setWordWrap(True)
+        pixmap = self.pil2pixmap(self.generate_qr()).scaled(150, 150, Qt.KeepAspectRatio)
+        self.label_qr.setPixmap(pixmap) 
+        self.label_qr.resize(150,150) 
+
+        self.openFolderButton.clicked.connect(openFolder);
+        self.openFolderButton.setIcon(self.icon_from_svg(resource_path("assets/icons/folder-open.svg")))
+
+    def generate_qr(self):
+        input_data = "http://"+get_address()+":8080"
+        qr = qrcode.QRCode(version=1, box_size=20, border=2)
+        qr.add_data(input_data)
+        qr.make(fit=True)
+        img = qr.make_image(fill='black', back_color='white')
+        return img
 
     def pil2pixmap(self, im):
         im2 = im.convert("RGBA")
@@ -1199,9 +1235,20 @@ class CustomDialog(QDialog):
         pixmap = QPixmap.fromImage(qim)
         return pixmap
 
+    def icon_from_svg(self,svg_filepath):
+        img = QPixmap(svg_filepath)
+        qp = QPainter(img)
+        qp.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        qp.fillRect( img.rect(), self.message.palette().color(QPalette.Foreground) )
+        qp.end()
+        return QIcon(img)
+
     def stop(self):
         self.done(0)
 
+# --------------------------------------------------   
+# Classe pour la boîte de dialogue d'attente
+# -------------------------------------------------- 
 
 class WaitDialog(QDialog):
     def __init__(self):
@@ -1248,6 +1295,9 @@ class WaitDialog(QDialog):
     def closeEvent(self, evnt):
         evnt.ignore()
 
+# --------------------------------------------------   
+# Classe pour la boîte de dialogue d'importation
+# -------------------------------------------------- 
 
 class ImportDialog(QDialog):
     def __init__(self,frame,camera_Width,camera_Height ,fps,frame_count,duration):
@@ -1371,19 +1421,192 @@ class ImportDialog(QDialog):
         if self.newcamera_Height != 0 and self.newcamera_Width  != 0 and self.newframe_count != 0:
             return (self.newcamera_Width,self.newcamera_Height, self.newframe_count, self.rotation    )                                                        
 
+# --------------------------------------------------   
+# Classe pour la boîte de dialogue de la webcam
+# -------------------------------------------------- 
+
+class WebcamDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+
+        loadUi(resource_path('assets/ui/webcam.ui'), self)
+        self.setWindowTitle("Enregistrement d'une vidéo")
+
+        self.btn_apply = self.buttonBox.button(QDialogButtonBox.Ok)
+        self.btn_apply.setEnabled(False)     
+
+        img = QPixmap(resource_path("assets/icons/video.svg"))
+        qp = QPainter(img)
+        qp.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        qp.fillRect( img.rect(), QColor(255,255,255))
+        qp.end()
+        self.capture.setIcon(QIcon(img))
+        self.capture.setStyleSheet("font-weight: bold;background-color:'#1b7a46';color:'#fff'")
+
+        self.refreshButton.setIcon(self.icon_from_svg(resource_path("assets/icons/arrow-rotate-right.svg")))
+        self.applyButton.setIcon(self.icon_from_svg(resource_path("assets/icons/check.svg")))
+        
+        self.infos.setText("<p><b>"+str(os.path.join(application_path ,  "videos", ""))+"</b></p>")
+        self.infos.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        
+        self.openFolderButton.clicked.connect(openFolder);
+        self.openFolderButton.setIcon(self.icon_from_svg(resource_path("assets/icons/folder-open.svg")))
+
+        self.camera_id = None
+        self.recordDone = False
+        self.firstStart = True
+        self.cap = None 
+        
+        self.refreshButton.clicked.connect(self.refresh)
+        self.applyButton.clicked.connect(self.apply)
+        self.selectWebcam.activated.connect(self.changeCamera)
+        self.refresh()
+        
+        self.capture.clicked.connect(self.capture_start)
+
+        self.btn_apply = self.buttonBox.button(QDialogButtonBox.Ok)
+        self.onlyDouble = QDoubleValidator()
+        self.onlyDouble.setLocale(QLocale("en_US"))
+        self.heightEdit.setValidator(self.onlyDouble)
+        self.widthEdit.setValidator(self.onlyDouble)
+        self.expositionEdit.setValidator(self.onlyDouble)
+
+        #self.image_label.setScaledContents(True)
+
+    def refresh(self):
+        if self.cap != None and self.firstStart != True:
+            release_cap(self.cap)
+            self.timer.stop()
+            self.cap = None 
+
+        self.selectWebcam.clear()
+        camera_ports = list_webcam_ports()
+        
+        if len(camera_ports) != 0:
+            for i in range(len(camera_ports)):
+                self.selectWebcam.addItem("Camera " + str(camera_ports[i]))
+                
+            
+            self.camera_id = camera_ports[0]
+            self.capture.setEnabled(True)
+        else:
+            self.capture.setEnabled(False)
+
+        self.apply()
 
 
-    # def closeEvent(self, evnt):
-    #     if self.newcamera_Height != 0 and self.newcamera_Width  != 0 and self.newframe_count != 0:
-    #         super().closeEvent(evnt)
-    #     else:
-    #         evnt.ignore()
+    def apply(self):
+
+        if self.cap != None and self.firstStart != True:
+            release_cap(self.cap)
+            self.timer.stop()
+            self.cap = None 
+            
+        self.captureStatus = False    
+        self.image = None 
+        self.ret = False  
+        self.out1 = None 
+
+        self.timer = QTimer(self, interval=5)
+        self.timer.timeout.connect(self.update_frame)
+
+
+        if self.cap is None:
+            if self.firstStart:
+                self.cap, self.fps, self.res_width, self.res_height, self.exposition = webcam_init(self.camera_id)
+            else:
+                self.cap, self.fps, self.res_width, self.res_height, self.exposition = webcam_init(self.camera_id,int(float(self.widthEdit.text())),int(float(self.heightEdit.text())),int(float(self.expositionEdit.text())))
+            self.widthEdit.setText(str(self.res_width))
+            self.heightEdit.setText(str(self.res_height))
+            if sys.platform == "win32":
+                print("Main expo = "+str(self.exposition))
+                self.expositionEdit.setText(str(self.exposition))
+            else:
+                self.expositionEdit.setText(str(self.exposition))
+            self.timer2 = QTimer(self)
+            self.timer2.timeout.connect(self.capture_image)
+            self._image_counter = 0
+            self.firstStart = False
+        self.timer.start()
+
+    def changeCamera(self):
+        release_cap(self.cap)
+        self.camera_id = int(self.selectWebcam.currentText().replace('Camera ', ''))
+        self.refresh()
+
+    pyqtSlot()
+    def update_frame(self):
+        if self.cap != None:
+            self.ret, self.image = webcam_get_image(self.cap)
+            if self.ret:
+                self.displayImage(self.image)
+
+    pyqtSlot()
+    def capture_start(self):
+        
+        if self.captureStatus == True:
+            self.captureStatus = False
+            self.capture.setText("Démarrer l'enregistrement")
+            self.capture.setStyleSheet("font-weight: bold;background-color:'#1b7a46';color:'#fff'")
+            self.btn_apply.setEnabled(True)
+            print("Capture terminée")
+            self.end = time.time()
+
+            # Time elapsed
+            seconds = self.end - self.start
+            print ("Time taken : {0} seconds".format(seconds))
+
+            # Calculate frames per second
+            fps  = self._image_counter / seconds
+            print("Estimated frames per second : {0}".format(fps))
+            webcam_end_capture(self.out1)
+            self.timer2.stop()
+            self.recordDone = True
+            self.btn_apply.setEnabled(True)
+        else:
+            self.captureStatus = True
+            self.out1, self.video_path = webcam_init_capture(self.fps, application_path, self.res_width, self.res_height)
+            print("Capture en cours")
+            self.capture.setText("Arrêter l'enregistrement")
+            self.capture.setStyleSheet("font-weight: bold;background-color:'#880000';color:'#fff'")
+            self.btn_apply.setEnabled(False)
+            self.start = time.time()
+            self.timer2.start()
+
+    pyqtSlot()
+    def capture_image(self):
+        if self.captureStatus == True and self.ret == True:
+            #QtWidgets.QApplication.beep()
+            webcam_write_image(self.out1, self.image)
+            self._image_counter += 1
+
+    def displayImage(self, img):
+        qformat = QImage.Format_Indexed8
+        if len(img.shape)==3 :
+            if img.shape[2]==4:
+                qformat = QImage.Format_RGBA8888
+            else:
+                qformat = QImage.Format_RGB888
+        outImage = QImage(img, img.shape[1], img.shape[0], img.strides[0], qformat)
+        outImage = outImage.rgbSwapped()
+        self.image_label.setPixmap(QPixmap.fromImage(outImage).scaled(self.image_label.width(), self.image_label.height(),Qt.KeepAspectRatio, Qt.FastTransformation))
+
+    def release(self):
+        release_cap(self.cap)
+
+    def icon_from_svg(self,svg_filepath):
+        img = QPixmap(svg_filepath)
+        qp = QPainter(img)
+        qp.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        qp.fillRect( img.rect(), self.infos.palette().color(QPalette.Foreground) )
+        qp.end()
+        return QIcon(img)
+
 
 # --------------------------------------------------   
 # Classe Worker exécutant la lecture dans un thread
 # -------------------------------------------------- 
 
-# On crée le thread secondaire
 class Worker(QObject):
     finished = pyqtSignal()
     data = pyqtSignal(int,object)
@@ -1451,7 +1674,6 @@ class Worker(QObject):
 # Classe Worker exécutant la lecture dans un thread
 # -------------------------------------------------- 
 
-# On crée le thread secondaire
 class ImportWorker(QObject):
     finished = pyqtSignal()
     data = pyqtSignal(list,dict,bool,list)
@@ -1476,7 +1698,6 @@ class ImportWorker(QObject):
 # Classe WebWorker exécutant le serveur web dans un thread
 # -------------------------------------------------- 
 
-# On crée le thread secondaire
 class WebWorker(QObject):
     finished = pyqtSignal()
     video = pyqtSignal(str)
@@ -1498,6 +1719,30 @@ class WebWorker(QObject):
         self.finished.emit()
         print("Worker stop")
 
+# class WebcamWorker(QObject):
+#     finished = pyqtSignal()
+#     data = pyqtSignal(str)
+
+#     def __init__(self, parent=None):
+#         super(WebcamWorker, self).__init__(parent)
+
+#     def run(self):
+#         self.webcam_dlg = WebcamDialog()
+#         if self.webcam_dlg.exec():
+#             print("Success!")
+#             self.webcam_dlg.release()
+#             if self.webcam_dlg.recordDone == True:
+#                 self.data.emit(self.webcam_dlg.video_path)
+#             self.finished.emit()
+#         else:
+#             print("Cancel!")
+#             self.webcam_dlg.release()
+#             self.data.emit("")
+#             self.finished.emit()
+
+#     def stop(self):
+#         self.webcam_dlg.stop()
+
 # --------------------------------------------------   
 # Gestion du chemin des ressources pour les executables
 # -------------------------------------------------- 
@@ -1507,11 +1752,19 @@ def resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
+def openFolder():
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
+        subprocess.call([opener, os.path.join(application_path ,  "videos", "")])
+
 # --------------------------------------------------   
 # Execution de l'application
 # -------------------------------------------------- 
 
 if __name__ == "__main__":
+    try:
+        os.mkdir("./videos")
+    except FileExistsError:
+        print("Video folder already exists")
     import sys
     app = QApplication(sys.argv)
     app.setStyle('Fusion')

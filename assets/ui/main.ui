@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>971</width>
-    <height>674</height>
+    <height>709</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -357,7 +357,63 @@ background-color:'#1b7a46';color:'#fff'</string>
             </property>
            </widget>
           </item>
-          <item row="3" column="0">
+          <item row="2" column="0">
+           <layout class="QHBoxLayout" name="horizontalLayout_4">
+            <item>
+             <widget class="QPushButton" name="webcamButton">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>34</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>34</height>
+               </size>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">font-weight: bold;;
+background-color:'#1b7a46';color:'#fff'</string>
+              </property>
+              <property name="text">
+               <string>Webcam</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="phoneButton">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>34</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>34</height>
+               </size>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">font-weight: bold;;
+background-color:'#1b7a46';color:'#fff'</string>
+              </property>
+              <property name="text">
+               <string>Smartphone/Tablette</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="6" column="0">
            <widget class="QPushButton" name="validateButton">
             <property name="minimumSize">
              <size>
@@ -385,7 +441,7 @@ background-color:'#1b7a46';color:'#fff'</string>
             </property>
            </widget>
           </item>
-          <item row="2" column="0">
+          <item row="5" column="0">
            <widget class="QScrollArea" name="scrollArea">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -936,31 +992,12 @@ QGroupBox::title {
            </widget>
           </item>
           <item row="1" column="0">
-           <widget class="QPushButton" name="phoneButton">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>34</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>16777215</width>
-              <height>34</height>
-             </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">font-weight: bold;;
-background-color:'#1b7a46';color:'#fff'</string>
-            </property>
+           <widget class="QLabel" name="label_3">
             <property name="text">
-             <string>Enregistrer une video avec un smartphone</string>
+             <string>Ou enregistrer un vidéo :</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
             </property>
            </widget>
           </item>
@@ -1084,7 +1121,7 @@ background-color:'#1b7a46';color:'#fff'</string>
                <x>0</x>
                <y>0</y>
                <width>401</width>
-               <height>554</height>
+               <height>589</height>
               </rect>
              </property>
              <layout class="QGridLayout" name="gridLayout_9">
@@ -1435,6 +1472,7 @@ QGroupBox::title {
     </widget>
     <addaction name="actionOuvrir_un_fichier_vid_o"/>
     <addaction name="actionEnregistrer_une_vid_o_avec_un_smartphone"/>
+    <addaction name="actionEnregistrer_une_vid_o_avec_la_webcam"/>
     <addaction name="menuExporter"/>
     <addaction name="actionExporter_le_graphique"/>
    </widget>
@@ -1504,6 +1542,11 @@ QGroupBox::title {
   <action name="actionEnregistrer_une_vid_o_avec_un_smartphone">
    <property name="text">
     <string>Enregistrer une vidéo avec un smartphone</string>
+   </property>
+  </action>
+  <action name="actionEnregistrer_une_vid_o_avec_la_webcam">
+   <property name="text">
+    <string>Enregistrer une vidéo avec la webcam</string>
    </property>
   </action>
  </widget>
