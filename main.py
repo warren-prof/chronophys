@@ -1,7 +1,7 @@
 # ChronoPhys est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques
 # License Créative Commons : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)
 # Auteur : Thibault Giauffret, ensciences.fr (2022)
-# Version : dev-beta v0.4 (08 mai 2022)
+# Version : dev-beta v0.4.1 (09 mai 2022)
 
 
 # --------------------------------------------------   
@@ -83,6 +83,23 @@ if getattr(sys, 'frozen', False):
 elif __file__:
     application_path = str(Path(os.path.dirname(os.path.realpath(__file__))))
 
+import logging
+# create logger 
+logger = logging.getLogger('debug')
+logger.setLevel(logging.DEBUG)
+# create file handler which logs even debug messages
+fh = logging.FileHandler('debug.log',mode='w')
+fh.setLevel(logging.DEBUG)
+# create console handler with a higher log level
+ch = logging.StreamHandler()
+ch.setLevel(logging.ERROR)
+# create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+ch.setFormatter(formatter)
+# add the handlers to the logger
+logger.addHandler(fh)
+logger.addHandler(ch)
 
 # --------------------------------------------------   
 # Classe principale gérant l'application
@@ -94,10 +111,12 @@ class Window(QMainWindow):
     # --------------------------------------------------  
     def __init__(self):
         super().__init__()
+        logger.info("Affichage de la fenêtre principale")
 
         # Importation de l'interface de base
         loadUi(resource_path('assets/ui/main.ui'), self)
         self.setWindowIcon(QIcon(resource_path('assets/icons/icon.png')))
+        logger.info("Chargement de l'interface main.ui réalisée avec succès")
        
         # Initialisation des variables
         self.mesures = False
@@ -108,7 +127,7 @@ class Window(QMainWindow):
         self.loupe = False
         self.newopen = False
         self.webserver_running = False
-        self.version = "<b>ChronoPhys</b> est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques<br><br><b>License Créative Commons</b> : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)<br><b>Auteur</b> : Thibault Giauffret, <a href=\"https://ensciences.fr\">ensciences.fr</a>(2022)<hr><b>Version</b> : dev-beta v0.4 (08 mai 2022)<br><b>Bugs</b> : <a href=\"mailto:contact@ensciences.fr\">contact@ensciences.fr</a>"
+        self.version = "<b>ChronoPhys</b> est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques<br><br><b>License Créative Commons</b> : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)<br><b>Auteur</b> : Thibault Giauffret, <a href=\"https://ensciences.fr\">ensciences.fr</a>(2022)<hr><b>Version</b> : dev-beta v0.4.1 (09 mai 2022)<br><b>Bugs</b> : <a href=\"mailto:contact@ensciences.fr\">contact@ensciences.fr</a>"
 
         # Ajout du plot au canvas
         self.figure = Figure()
@@ -229,18 +248,22 @@ class Window(QMainWindow):
         self.loupeButton.clicked.connect(self.loupe_clicked)
         self.canvas_resize()
 
+        logger.info("Fin de l'initialisation de l'interface")
+
     # --------------------------------------------------   
     # Complétion de l'interface une fois la video ouverte
     # --------------------------------------------------  
 
     def ui_update(self):
 
+        logger.info("Mise à jour de l'interface")
+
         self.canvas_resize()
 
         try:
             self.sc.mpl_disconnect(self.clickEvent)
         except:
-            print("An exception occurred") 
+            logger.warning("Impossible de déconnecter l'évènement de clic sur canvas. Déjà déconnecté ?!") 
 
         self.label_nombre.setText(str(self.videoConfig["nb_images"]))
         self.label_ips.setText(str(self.videoConfig["fps"]))
@@ -249,7 +272,7 @@ class Window(QMainWindow):
         self.label_hauteur.setText(str(self.videoConfig["height"]))
         self.tabWidget.setTabEnabled(2, True)
 
-        self.pixmap = QPixmap(resource_path("assets/ensciences.svg")).scaled(78, 78, Qt.KeepAspectRatio)
+        self.pixmap = QPixmap(resource_path("assets/icons/ensciences.svg")).scaled(78, 78, Qt.KeepAspectRatio)
         self.label_ensciences.setPixmap(self.pixmap) 
         self.label_ensciences.resize(80,80) 
 
@@ -351,6 +374,8 @@ class Window(QMainWindow):
         self.tableWidget.setRowCount(self.nb_images) 
         self.tableWidget.setHorizontalHeaderLabels(["Temps (s)", "x (m)", "y (m)" ]) 
 
+        logger.info("Mise à jour de l'interface réussie")
+
     # --------------------------------------------------   
     # Gestion du redimensionnement de la fenêtre
     # -------------------------------------------------- 
@@ -367,14 +392,17 @@ class Window(QMainWindow):
     # --------------------------------------------------  
 
     def video_open(self):
+        logger.info("Clic openButton")
         dialog = QFileDialog(self)
         dialog.setNameFilter(str("Video (*.mp4 *.avi *.wmv *mov);;All Files (*.*)"))
         dialog.setDirectory(os.getenv('HOME'))
         if dialog.exec_():
             filename = dialog.selectedFiles()[0]
+            logger.info("Vidéo sélectionnée : "+filename)
             self.import_video(filename)
 
     def get_import_data(self, images, videoConfig, error, video_timestamp):
+        logger.info("Importation des données de la vidéo")
         self.dlg_wait.stop()
         if error == False:
             self.images = images
@@ -393,6 +421,7 @@ class Window(QMainWindow):
             self.newopen = True
         else:
             dlg = CustomDialog("Une erreur est survenue lors de l'ouverture de la vidéo. Assurez-vous qu'elle contienne moins de 150 images.")
+            logger.warning("La vidéo contient trop d'images...")
             if dlg.exec():
                 print("Success!")
             else:
@@ -405,31 +434,35 @@ class Window(QMainWindow):
 
     def smartphone_video_open(self):
 
-
+        logger.info("Importation d'une vidéo depuis un smartphone")
         if self.webserver_running == False:
-            # On crée le QThread object
-            self.web_thread = QThread()
-            self.web_thread.setTerminationEnabled(True)
+            logger.info("Lancement du thread avec WebWorker")
+            try :
+                # On crée le QThread object
+                self.web_thread = QThread()
+                self.web_thread.setTerminationEnabled(True)
 
-            # On crée l'objet "Worker"
-            self.web_worker = WebWorker()
+                # On crée l'objet "Worker"
+                self.web_worker = WebWorker()
 
-            # On déplace le worker dans le thread
-            self.web_worker.moveToThread(self.web_thread)
+                # On déplace le worker dans le thread
+                self.web_worker.moveToThread(self.web_thread)
 
-            # On connecte les signaux et les slots
-            self.web_thread.started.connect(self.web_worker.run)
-            self.web_worker.finished.connect(self.stop_webserver)
-            self.web_worker.finished.connect(self.web_thread.quit)
-            self.web_worker.finished.connect(self.web_worker.deleteLater)
-            self.web_thread.finished.connect(self.web_thread.deleteLater)
+                # On connecte les signaux et les slots
+                self.web_thread.started.connect(self.web_worker.run)
+                self.web_worker.finished.connect(self.stop_webserver)
+                self.web_worker.finished.connect(self.web_thread.quit)
+                self.web_worker.finished.connect(self.web_worker.deleteLater)
+                self.web_thread.finished.connect(self.web_thread.deleteLater)
 
-            self.web_worker.video.connect(self.video_received)
+                self.web_worker.video.connect(self.video_received)
 
-            # On démarre le thread
-            self.web_thread.start()
+                # On démarre le thread
+                self.web_thread.start()
 
-            self.webserver_running = True
+                self.webserver_running = True
+            except Exception as ex:
+                logger.exception("Une erreur est survenue : " + str(ex))
 
         self.server_dlg = WebDialog()
         if self.server_dlg.exec():
@@ -441,18 +474,23 @@ class Window(QMainWindow):
         self.webserver_running = False
 
     def video_received(self,filename):
+        logger.info("Réception d'une vidéo depuis le serveur web")
         filename = "./videos/"+filename
         dlg = CustomDialog("Une vidéo a été reçue, voulez-vous l'ouvrir ?")
         if dlg.exec():
             self.server_dlg.stop()
             self.import_video(filename)
-            
         else:
-            print("Cancel!")
+            logger.info("Importation refusée")
 
     def import_video(self, filename):
-        frame, camera_Width,camera_Height ,fps,frame_count,duration = extract_infos(str(filename))
-        dlg2 = ImportDialog(frame,camera_Width,camera_Height ,fps,frame_count,duration )
+        logger.info("Importation de la vidéo")
+        try :
+            logger.info("Extraction des informations de la vidéo")
+            frame, camera_Width,camera_Height ,fps,frame_count,duration = extract_infos(str(filename))
+            dlg2 = ImportDialog(frame,camera_Width,camera_Height ,fps,frame_count,duration )
+        except Exception as ex :
+            logger.exception("Une erreur est survenue : " + str(ex))
 
         if dlg2.exec_() == QDialog.Accepted:
             self.dlg_wait = WaitDialog()
@@ -460,45 +498,48 @@ class Window(QMainWindow):
             if self.dlg_wait.start():
                 value = dlg2.GetValue()
                 
-                # On crée le QThread object
-                self.import_thread = QThread()
-                self.import_thread.setTerminationEnabled(True)
+                try :
+                    # On crée le QThread object
+                    self.import_thread = QThread()
+                    self.import_thread.setTerminationEnabled(True)
 
-                # On crée l'objet "Worker"
-                self.import_worker = ImportWorker(filename, value)
+                    # On crée l'objet "Worker"
+                    self.import_worker = ImportWorker(filename, value)
 
-                # On déplace le worker dans le thread
-                self.import_worker.moveToThread(self.import_thread)
+                    # On déplace le worker dans le thread
+                    self.import_worker.moveToThread(self.import_thread)
 
-                # On connecte les signaux et les slots
-                self.import_thread.started.connect(self.import_worker.run)
-                self.import_worker.finished.connect(self.stop)
-                self.import_worker.finished.connect(self.import_thread.quit)
-                self.import_worker.finished.connect(self.import_worker.deleteLater)
-                self.import_thread.finished.connect(self.import_thread.deleteLater)
+                    # On connecte les signaux et les slots
+                    self.import_thread.started.connect(self.import_worker.run)
+                    self.import_worker.finished.connect(self.stop)
+                    self.import_worker.finished.connect(self.import_thread.quit)
+                    self.import_worker.finished.connect(self.import_worker.deleteLater)
+                    self.import_thread.finished.connect(self.import_thread.deleteLater)
 
-                self.import_worker.data.connect(self.get_import_data)
+                    self.import_worker.data.connect(self.get_import_data)
 
-                # On démarre le thread
-                self.import_thread.start()
+                    # On démarre le thread
+                    self.import_thread.start()
+                except Exception as ex:
+                    logger.exception("Une erreur est survenue : " + str(ex))
                 
         else:
-            print("Cancel!")
+            logger.info("Importation refusée")
 
 
     # --------------------------------------------------   
     # Gestion de la webcam
     # --------------------------------------------------  
     def webcam_video_open(self):
-
         self.webcam_dlg = WebcamDialog()
         if self.webcam_dlg.exec():
+            logger.info("Enregistrement webcam confirmé")
             print("Success!")
             self.webcam_dlg.release()
             if self.webcam_dlg.recordDone == True:
                 self.import_video(self.webcam_dlg.video_path)
         else:
-            print("Cancel!")
+            logger.info("Enregistrement webcam annulé")
             self.webcam_dlg.release()
 
 
@@ -507,35 +548,40 @@ class Window(QMainWindow):
     # --------------------------------------------------  
 
     def play(self):
+        logger.info("Clic playButton, lecture de la vidéo")
         if self.images != []:
             self.playButton.setEnabled(False);
             self.scrollArea.setEnabled(False);
             self.playStatus = True
 
-            # On crée le QThread object
-            self.mythread = QThread()
-            self.mythread.setTerminationEnabled(True)
+            try :
+                # On crée le QThread object
+                self.mythread = QThread()
+                self.mythread.setTerminationEnabled(True)
 
 
-            # On crée l'objet "Worker"
-            self.worker = Worker(images= self.images, x=self.x, y=self.y, axes=self.sc.axes,myextent = self.myextent,etalonnage=self.etalonnage,showEtalon=self.showEtalon,ratio=self.ratio,settings=self.settings, current_image=self.current_image, nb_images=self.nb_images)
+                # On crée l'objet "Worker"
+                self.worker = Worker(images= self.images, x=self.x, y=self.y, axes=self.sc.axes,myextent = self.myextent,etalonnage=self.etalonnage,showEtalon=self.showEtalon,ratio=self.ratio,settings=self.settings, current_image=self.current_image, nb_images=self.nb_images)
 
-            # On déplace le worker dans le thread
-            self.worker.moveToThread(self.mythread)
+                # On déplace le worker dans le thread
+                self.worker.moveToThread(self.mythread)
 
-            # On connecte les signaux et les slots
-            self.mythread.started.connect(self.worker.run)
-            self.worker.finished.connect(self.stop)
-            self.worker.finished.connect(self.mythread.quit)
-            self.worker.finished.connect(self.worker.deleteLater)
-            self.mythread.finished.connect(self.mythread.deleteLater)
+                # On connecte les signaux et les slots
+                self.mythread.started.connect(self.worker.run)
+                self.worker.finished.connect(self.stop)
+                self.worker.finished.connect(self.mythread.quit)
+                self.worker.finished.connect(self.worker.deleteLater)
+                self.mythread.finished.connect(self.mythread.deleteLater)
 
-            self.worker.data.connect(self.play_update)
+                self.worker.data.connect(self.play_update)
 
-            # On démarre le thread
-            self.mythread.start()
+                # On démarre le thread
+                self.mythread.start()
+            except Exception as ex:
+                logger.exception("Une erreur est survenue : " + str(ex))
 
     def stop(self):
+        logger.info("Arrêt de la lecture")
         self.playStatus = False
         self.playButton.setEnabled(True);
         self.scrollArea.setEnabled(True);
@@ -544,16 +590,18 @@ class Window(QMainWindow):
         try:
             self.worker.stop()
         except:
-            print("An exception occurred") 
+            logger.warning("Tentative d'arrêt de la lecture. Déjà arrêté ?")
         
 
     def next_clicked(self):
+        logger.info("Clic nextButton")
         if self.current_image < self.nb_images-1 and self.playStatus == False:
             self.current_image+=1
             self.horizontalSlider.setValue(self.current_image+1)
             self.canvas_update()
 
     def prev_clicked(self):
+        logger.info("Clic prevButton")
         if self.current_image > 0 and self.playStatus == False:
             self.current_image-=1
             self.horizontalSlider.setValue(self.current_image+1)
@@ -564,6 +612,7 @@ class Window(QMainWindow):
     # --------------------------------------------------  
 
     def loupe_clicked(self):
+        logger.info("Clic loupeButton")
         if self.loupe == False :
             self.loupeBox.show()
             self.loupe = True
@@ -619,6 +668,7 @@ class Window(QMainWindow):
     # --------------------------------------------------  
 
     def axe_clicked(self,value):
+        logger.info("Clic axeButton")
         self.axis_set = True
         self.applyOrient = True
 
@@ -629,10 +679,12 @@ class Window(QMainWindow):
         try:
             self.sc.mpl_disconnect(self.clickEvent)
         except:
-            print("An exception occurred") 
+            logger.warning("Impossible de déconnecter l'évènement de clic sur canvas. Déjà déconnecté ?!")
+        logger.info("Connexion de l'évènement clic sur canvas avec la fonction axis_event")
         self.clickEvent = self.sc.mpl_connect('button_press_event',self.axis_event)
 
     def orient_update(self,value):
+        logger.info("Mise à jour des paramètres pour l'orientation des axes")
         if value == 1:
             return (1,1)
             self.Vaxis_orient = 1
@@ -651,6 +703,7 @@ class Window(QMainWindow):
             self.Haxis_orient = -1
 
     def axis_update(self):
+        logger.info("Mise à jour des axes")
         self.sc.axes.spines["left"].set_position(("data", 0))
         self.sc.axes.spines["bottom"].set_position(("data", 0))
         # Hide the top and right spines.
@@ -671,11 +724,13 @@ class Window(QMainWindow):
             self.sc.axes.plot(0, 0, "vk", transform=self.sc.axes.get_xaxis_transform(), clip_on=False)
     
     def repere_clicked(self):
+        logger.info("Clic repereButton")
         self.etalonBox.setEnabled(True)
         try:
             self.sc.mpl_disconnect(self.clickEvent)
         except:
-            print("An exception occurred") 
+            logger.warning("Impossible de déconnecter l'évènement de clic sur canvas. Déjà déconnecté ?!")
+        logger.info("Connexion de l'évènement clic sur canvas avec la fonction measure_event")
         self.clickEvent = self.sc.mpl_connect('button_press_event',self.measure_event)
         self.axis_set = False
 
@@ -711,7 +766,8 @@ class Window(QMainWindow):
         try:
             self.sc.mpl_disconnect(self.clickEvent)
         except:
-            print("An exception occurred") 
+            logger.warning("Impossible de déconnecter l'évènement de clic sur canvas. Déjà déconnecté ?!")
+        logger.info("Connexion de l'évènement clic sur canvas avec la fonction etalon_event")
         self.clickEvent = self.sc.mpl_connect('button_press_event',self.etalon_event)
         #self.validateButton.setStyleSheet("font-weight: bold;color:'#fff'")
         if value == 1:
@@ -722,6 +778,7 @@ class Window(QMainWindow):
             #print("Prise du second point pour l'étalonnage")
 
     def ruler_clicked(self):
+        logger.info("Clic rulerButton")
         if self.valeurEtalon.text() != "":
             self.buttonGroup.setExclusive(False)
             self.firstPoint.setChecked(False)
@@ -745,7 +802,8 @@ class Window(QMainWindow):
             try:
                 self.sc.mpl_disconnect(self.clickEvent)
             except:
-                print("An exception occurred") 
+                logger.warning("Impossible de déconnecter l'évènement de clic sur canvas. Déjà déconnecté ?!")
+            logger.info("Connexion de l'évènement clic sur canvas avec la fonction measure_event")
             self.clickEvent = self.sc.mpl_connect('button_press_event',self.measure_event)
 
             self.etalonBox.setStyleSheet("QGroupBox {\n    border: 2px solid gray;\n    border-color: #FF17365D;\n    margin-top: 27px;\n    font-size: 14px;\n    border-bottom-left-radius: 0px;\n    border-bottom-right-radius: 0px;\n}\n\nQGroupBox::title {\n    subcontrol-origin: margin;\n    subcontrol-position: top center;\n    border-top-left-radius: 0px;\n    border-top-right-radius: 0px;\n    padding: 5px 150px;\n    background-color: #FF17365D;\n    color: rgb(255, 255, 255);\n}")
@@ -779,6 +837,7 @@ class Window(QMainWindow):
         self.canvas_update()
 
     def settings_update(self):
+        logger.info("Clic formeButton")
         colorValue = self.comboColor.currentText()
         if colorValue == "Bleu":
             self.settings["color"] = "b"
@@ -853,6 +912,7 @@ class Window(QMainWindow):
     # --------------------------------------------------  
 
     def table_update(self,i,xdata,ydata):
+        logger.info("Mise à jour de la table")
         # Ajout de la valeur de t dans la ligne correspondant à l'image
         self.item = QTableWidgetItem()
         self.item.setText(str(round(self.video_timestamp[self.current_image]/1000,3)))
@@ -869,6 +929,7 @@ class Window(QMainWindow):
         self.tableWidget.setItem(i, 2, self.item)
 
     def table_update_etalon(self):
+        logger.info("Mise à jour de la table sur au changement de valeur d'étalon")
         if "old_valeurMetres" in self.etalonnage:
             for row in range(self.tableWidget.rowCount()):
                 x_item = self.tableWidget.item(row, 1)
@@ -882,11 +943,13 @@ class Window(QMainWindow):
 
 
     def table_clicked(self,item):
+        logger.info("Valeur de la table modifiée par l'utilisateur")
         self.tableWidget.itemChanged.connect(lambda : self.table_changed(item))
         # print("Item modified : "+str(item.row())+str(", ")+str(item.column())+str(", ")+str(item.text()))
         # print("Coresponding values in x y lists :"+str(self.x[item.row()])+str(", ")+str(self.y[item.row()]))
 
     def table_changed(self,item):
+        
         if item.column() == 1:
             if item.text() != '':
                 self.x[item.row()] = float(item.text())*self.etalonnage["valeurPixels"]/self.etalonnage["valeurMetres"]
@@ -898,7 +961,8 @@ class Window(QMainWindow):
             else:
                 self.y[item.row()] = None
         try: self.tableWidget.itemChanged.disconnect() 
-        except Exception: pass
+        except Exception as ex: 
+            logger.warning("Impossible de déconnecter l'évènement itemChanged sur tableWidget. Déjà déconnecté ?!")
         self.canvas_update()
 
     def row_changed(self,item):
@@ -912,6 +976,7 @@ class Window(QMainWindow):
     # --------------------------------------------------  
 
     def canvas_update(self):
+        logger.info("Mise à jour du canvas")
         if self.etalonnage["done"] == True:
             old_labels = self.sc.axes.get_xticklabels()
 
@@ -999,6 +1064,7 @@ class Window(QMainWindow):
     # --------------------------------------------------  
 
     def start_measures(self):
+        logger.info("Démarrage des mesures")
         if self.etalonnage["done"] == True:
             self.tabWidget.setTabEnabled(1, True);
             self.tabWidget.setCurrentIndex(1)
@@ -1008,7 +1074,8 @@ class Window(QMainWindow):
             try:
                 self.sc.mpl_disconnect(self.clickEvent)
             except:
-                print("An exception occurred") 
+                logger.warning("Impossible de déconnecter l'évènement de clic sur canvas. Déjà déconnecté ?!") 
+            logger.info("Connexion de l'évènement clic sur canvas avec la fonction measure_event")
             self.clickEvent = self.sc.mpl_connect('button_press_event',self.measure_event)
             self.mesures = True
         else:
@@ -1021,13 +1088,14 @@ class Window(QMainWindow):
                 print("Cancel!")
 
     def tabbar_clicked(self, index):
+        logger.info("Clic sur tab : " + str(index))
         # print("Tab index : "+str(index))
         if index == 0:
             self.mesures = False
             try:
                 self.sc.mpl_disconnect(self.clickEvent)
             except:
-                print("An exception occurred") 
+                logger.warning("Impossible de déconnecter l'évènement de clic sur canvas. Déjà déconnecté ?!") 
             
         elif index == 1:
             self.mesures = True
@@ -1059,6 +1127,7 @@ class Window(QMainWindow):
 
 
     def save_clicked(self,value):
+        logger.info("Clic sur saveButton avec option : " + str(value))
         if value == 0:
             clipboard = 'Temps (s)\tx (m)\ty(m)\r\n'
             for row in range(self.tableWidget.rowCount()):
@@ -1073,8 +1142,11 @@ class Window(QMainWindow):
                         rowdata.append('')
                 if rowdata != ['','','']:
                     clipboard+=str(rowdata[0])+'\t'+str(rowdata[1])+'\t'+str(rowdata[2])+'\r\n'
-            pccopy(clipboard)
-            print("Copied to clipboard !")
+            try :
+                pccopy(clipboard)
+                logger.info("Copie dans le presse-papier réussie !")
+            except Exception as ex :
+                logger.warning("Une erreur est survenue : " + ex)
         elif value == 1:
             path, ok = QFileDialog.getSaveFileName(
                 None, 'Sauvegarder les données', os.getenv('HOME'), 'Fichier CSV (*.csv)')
@@ -1085,22 +1157,26 @@ class Window(QMainWindow):
                 suffix = ".csv"
                 if ".csv" in path:
                     suffix = ""
-                with open(path+suffix, 'w') as csvfile:
-                    writer = csv.writer(
-                        csvfile, dialect='excel', lineterminator='\n')
-                    writer.writerow(header)
-                    for row in range(self.tableWidget.rowCount()):
-                        rowdata = []
-                        for column in range(self.tableWidget.columnCount()):
-                            item = self.tableWidget.item(row, column)
-                            if item is not None:
-                                mytext = item.text()
-                                mytext = mytext.replace('.',',',1)
-                                rowdata.append(mytext)
-                            else:
-                                rowdata.append('')
-                        if rowdata != ['','','']:
-                            writer.writerow(rowdata)
+                try :
+                    with open(path+suffix, 'w') as csvfile:
+                        writer = csv.writer(
+                            csvfile, dialect='excel', lineterminator='\n')
+                        writer.writerow(header)
+                        for row in range(self.tableWidget.rowCount()):
+                            rowdata = []
+                            for column in range(self.tableWidget.columnCount()):
+                                item = self.tableWidget.item(row, column)
+                                if item is not None:
+                                    mytext = item.text()
+                                    mytext = mytext.replace('.',',',1)
+                                    rowdata.append(mytext)
+                                else:
+                                    rowdata.append('')
+                            if rowdata != ['','','']:
+                                writer.writerow(rowdata)
+                    logger.info("Écriture du fichier csv terminée avec succès")
+                except Exception as ex:
+                    logger.warning("Une erreur est survenue : " + ex)
         elif value == 2:
             path, ok = QFileDialog.getSaveFileName(
                 None, 'Sauvegarder les données', os.getenv('HOME'), 'Script Python (*.py)')
@@ -1126,8 +1202,13 @@ class Window(QMainWindow):
                 suffix = ".py"
                 if ".py" in path:
                     suffix = ""
-                with open(path+suffix, 'w') as pyfile:
-                    pyfile.write(filecontent)
+                try :
+                    with open(path+suffix, 'w') as pyfile:
+                        pyfile.write(filecontent)
+                    logger.info("Écriture du fichier py terminée avec succès")
+                except Exception as ex:
+                    logger.warning("Une erreur est survenue : " + ex)
+                    
         elif value == 3:
             filePath, _ = QFileDialog.getSaveFileName(self, "Image", "",
                             "PNG(*.png);;JPEG(*.jpg *.jpeg);;All Files(*.*) ")
@@ -1135,8 +1216,12 @@ class Window(QMainWindow):
             if filePath == "":
                 return
             
-            # Sauvegarde du canvas
-            self.sc.print_figure(filePath)
+            try :
+                # Sauvegarde du canvas
+                self.sc.print_figure(filePath)
+                logger.info("Écriture du fichier png terminée avec succès")
+            except Exception as ex:
+                logger.warning("Une erreur est survenue : " + ex)
 
     def infos_clicked(self):
         dlg = CustomDialog(self.version)
@@ -1163,6 +1248,8 @@ class CustomDialog(QDialog):
     def __init__(self, themessage, qrcode=None):
         super().__init__()
 
+        logger.info("Affichage de CustomDialog")
+
         self.setWindowTitle("Message")
         
 
@@ -1188,6 +1275,7 @@ class CustomDialog(QDialog):
 
 
     def stop(self):
+        logger.info("Fermeture de CustomDialog")
         self.done(0)
 
 # --------------------------------------------------   
@@ -1196,7 +1284,9 @@ class CustomDialog(QDialog):
 class WebDialog(QDialog):
     def __init__(self):
         super().__init__()
+        logger.info("Affichage de WebDialog")
 
+        logger.info("Chargement de webserver.ui")
         loadUi(resource_path('assets/ui/webserver.ui'), self)
         self.setWindowTitle("Importation depuis un smartphone")
         
@@ -1244,6 +1334,7 @@ class WebDialog(QDialog):
         return QIcon(img)
 
     def stop(self):
+        logger.info("Fermeture de WebDialog")
         self.done(0)
 
 # --------------------------------------------------   
@@ -1253,6 +1344,7 @@ class WebDialog(QDialog):
 class WaitDialog(QDialog):
     def __init__(self):
         super().__init__()
+        logger.info("Affichage de WaitDialog")
 
         self.setWindowTitle("Importation en cours...")
         self.setFixedSize(200, 100)
@@ -1290,6 +1382,7 @@ class WaitDialog(QDialog):
         return True
 
     def stop(self):
+        logger.info("Fermeture de WaitDialog")
         self.done(0)
 
     def closeEvent(self, evnt):
@@ -1302,6 +1395,7 @@ class WaitDialog(QDialog):
 class ImportDialog(QDialog):
     def __init__(self,frame,camera_Width,camera_Height ,fps,frame_count,duration):
         super().__init__()
+        logger.info("Affichage de ImportDialog")
 
         self.frame = frame
         self.duration = duration
@@ -1313,6 +1407,7 @@ class ImportDialog(QDialog):
         self.newcamera_Width = self.camera_Width
         self.newcamera_Height = self.camera_Height
 
+        logger.info("Chargement de import.ui")
         loadUi(resource_path('assets/ui/import.ui'), self)
         self.setWindowTitle("Importation d'une vidéo")
 
@@ -1351,7 +1446,7 @@ class ImportDialog(QDialog):
 
         self.btn_apply = self.buttonBox.button(QDialogButtonBox.Ok)
 
-        if self.frame_count > 150:
+        if self.frame_count >= 150:
             self.images_perso.setStyleSheet("background-color:'#880000';")
             self.newframe_count = 0
         self.check_state()
@@ -1418,6 +1513,7 @@ class ImportDialog(QDialog):
         return QIcon(img)
 
     def GetValue(self):
+        logger.info("Envoie des valeurs choisies lors de l'importation")
         if self.newcamera_Height != 0 and self.newcamera_Width  != 0 and self.newframe_count != 0:
             return (self.newcamera_Width,self.newcamera_Height, self.newframe_count, self.rotation    )                                                        
 
@@ -1428,6 +1524,7 @@ class ImportDialog(QDialog):
 class WebcamDialog(QDialog):
     def __init__(self):
         super().__init__()
+        logger.info("Affichage de WabcamDialog")
 
         loadUi(resource_path('assets/ui/webcam.ui'), self)
         self.setWindowTitle("Enregistrement d'une vidéo")
@@ -1474,6 +1571,7 @@ class WebcamDialog(QDialog):
         #self.image_label.setScaledContents(True)
 
     def refresh(self):
+        logger.info("Recherche des ports pour les webcams")
         if self.cap != None and self.firstStart != True:
             release_cap(self.cap)
             self.timer.stop()
@@ -1481,7 +1579,7 @@ class WebcamDialog(QDialog):
 
         self.selectWebcam.clear()
         camera_ports = list_webcam_ports()
-        
+        logger.info("Webcams trouvées aux ports : "+str(camera_ports))
         if len(camera_ports) != 0:
             for i in range(len(camera_ports)):
                 self.selectWebcam.addItem("Camera " + str(camera_ports[i]))
@@ -1496,7 +1594,7 @@ class WebcamDialog(QDialog):
 
 
     def apply(self):
-
+        logger.info("Application des paramètres")
         if self.cap != None and self.firstStart != True:
             release_cap(self.cap)
             self.timer.stop()
@@ -1513,13 +1611,15 @@ class WebcamDialog(QDialog):
 
         if self.cap is None:
             if self.firstStart:
+                logger.info("Première initialisation de la webcam")
                 self.cap, self.fps, self.res_width, self.res_height, self.exposition = webcam_init(self.camera_id)
             else:
+                logger.info("Initialisation de la webcam avec les paramètres personnalisés")
                 self.cap, self.fps, self.res_width, self.res_height, self.exposition = webcam_init(self.camera_id,int(float(self.widthEdit.text())),int(float(self.heightEdit.text())),int(float(self.expositionEdit.text())))
             self.widthEdit.setText(str(self.res_width))
             self.heightEdit.setText(str(self.res_height))
             if sys.platform == "win32":
-                print("Main expo = "+str(self.exposition))
+                logger.info("L'exposition choisies est : " + self.exposition)
                 self.expositionEdit.setText(str(self.exposition))
             else:
                 self.expositionEdit.setText(str(self.exposition))
@@ -1527,6 +1627,7 @@ class WebcamDialog(QDialog):
             self.timer2.timeout.connect(self.capture_image)
             self._image_counter = 0
             self.firstStart = False
+        logger.info("Démarrage du timer pour le rafraichissement de l'affichage")
         self.timer.start()
 
     def changeCamera(self):
@@ -1543,34 +1644,37 @@ class WebcamDialog(QDialog):
 
     pyqtSlot()
     def capture_start(self):
-        
         if self.captureStatus == True:
+            logger.info("Fin de l'enregistrement")
             self.captureStatus = False
             self.capture.setText("Démarrer l'enregistrement")
             self.capture.setStyleSheet("font-weight: bold;background-color:'#1b7a46';color:'#fff'")
             self.btn_apply.setEnabled(True)
-            print("Capture terminée")
+            #print("Capture terminée")
             self.end = time.time()
 
             # Time elapsed
             seconds = self.end - self.start
-            print ("Time taken : {0} seconds".format(seconds))
+            logger.info("Temps écoulé : "+str(seconds))
 
             # Calculate frames per second
             fps  = self._image_counter / seconds
-            print("Estimated frames per second : {0}".format(fps))
+            logger.info("Nombre d'images par seconde estimé : "+str(fps))
             webcam_end_capture(self.out1)
+            logger.info("Arrêt du timer pour l'enregistrement")
             self.timer2.stop()
             self.recordDone = True
             self.btn_apply.setEnabled(True)
         else:
+            logger.info("Démarrage de l'enregistrement")
             self.captureStatus = True
             self.out1, self.video_path = webcam_init_capture(self.fps, application_path, self.res_width, self.res_height)
-            print("Capture en cours")
+            #print("Capture en cours")
             self.capture.setText("Arrêter l'enregistrement")
             self.capture.setStyleSheet("font-weight: bold;background-color:'#880000';color:'#fff'")
             self.btn_apply.setEnabled(False)
             self.start = time.time()
+            logger.info("Démarrage du timer pour l'enregistrement")
             self.timer2.start()
 
     pyqtSlot()
@@ -1613,6 +1717,7 @@ class Worker(QObject):
 
     def __init__(self, images,x,y, axes,myextent,etalonnage,showEtalon,ratio,settings,current_image, nb_images, parent=None):
         super(Worker, self).__init__(parent)
+        logger.info("Démarrage du Worker pour la lecture")
 
         self.axes = axes
         self.current_number = current_image
@@ -1667,7 +1772,7 @@ class Worker(QObject):
     def stop(self):
         self.threadactive = False
         self.finished.emit()
-        print("Worker stop")
+        logger.info("Arrêt Worker pour la lecture")
 
 
 # --------------------------------------------------   
@@ -1682,6 +1787,7 @@ class ImportWorker(QObject):
         super(ImportWorker, self).__init__(parent)
         self.filename = filename
         self.value = value
+        logger.info("Démarrage du Worker pour l'importation de vidéo")
 
     def run(self):
 
@@ -1692,7 +1798,7 @@ class ImportWorker(QObject):
 
     def stop(self):
         self.finished.emit()
-        print("Worker stop")
+        logger.info("Arrêt du Worker pour l'importation de vidéo")
 
 # --------------------------------------------------   
 # Classe WebWorker exécutant le serveur web dans un thread
@@ -1704,20 +1810,21 @@ class WebWorker(QObject):
 
     def __init__(self, parent=None):
         super(WebWorker, self).__init__(parent)
-
+        logger.info("Démarrage du Worker pour le serveur web")
         self.threadactive=True
 
     def run(self):
-
-        start_server(self)
-        
+        try:
+            start_server(self)
+        except Exception as ex:
+            logger.exception("Une erreur est survenue : " + str(ex))
         self.threadactive = False
         self.finished.emit()
 
     def stop(self):
         self.threadactive = False
         self.finished.emit()
-        print("Worker stop")
+        logger.info("Arrêt du Worker pour le serveur web")
 
 # class WebcamWorker(QObject):
 #     finished = pyqtSignal()
@@ -1753,19 +1860,31 @@ def resource_path(relative_path):
     return os.path.join(os.path.abspath("."), relative_path)
 
 def openFolder():
-        opener = "open" if sys.platform == "darwin" else "xdg-open"
+    logger.info("Ouverture du dossier contenant les vidéos")
+    if sys.platform == "win32":
+        opener = "explorer"
+    elif sys.platform == "darwin":
+        opener = "open" 
+    else :
+        opener = "xdg-open"
+    try :
         subprocess.call([opener, os.path.join(application_path ,  "videos", "")])
+    except Exception as ex:
+        logger.exception("Une erreur est survenue : " + str(ex))
 
 # --------------------------------------------------   
 # Execution de l'application
 # -------------------------------------------------- 
 
 if __name__ == "__main__":
+    logger.info("-------------------------------------------------------------")
+    logger.info("Démarrage de l'application")
+    logger.info("-------------------------------------------------------------")
     try:
         os.mkdir("./videos")
     except FileExistsError:
-        print("Video folder already exists")
-    import sys
+        logger.warning("Le dossier videos existe déjà")
+
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     ui = Window()
