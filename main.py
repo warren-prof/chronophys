@@ -1619,7 +1619,7 @@ class WebcamDialog(QDialog):
             self.widthEdit.setText(str(self.res_width))
             self.heightEdit.setText(str(self.res_height))
             if sys.platform == "win32":
-                logger.info("L'exposition choisies est : " + self.exposition)
+                logger.info("L'exposition choisies est : " + str(self.exposition))
                 self.expositionEdit.setText(str(self.exposition))
             else:
                 self.expositionEdit.setText(str(self.exposition))
