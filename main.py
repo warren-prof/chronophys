@@ -1,8 +1,9 @@
 # ChronoPhys est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques
-# License Créative Commons : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)
+# Licence : GNU GPLv3 
 # Auteur : Thibault Giauffret, ensciences.fr (2022)
-# Version : dev-beta v0.4.1 (09 mai 2022)
+# Version : dev-beta v0.4.2 (10 mai 2022)
 
+version_number = "dev-beta v0.4.2 (10 mai 2022)"
 
 # --------------------------------------------------   
 # Importation des librairies
@@ -84,22 +85,23 @@ elif __file__:
     application_path = str(Path(os.path.dirname(os.path.realpath(__file__))))
 
 import logging
-# create logger 
+from logging.handlers import RotatingFileHandler
+
+# Création du logger
 logger = logging.getLogger('debug')
 logger.setLevel(logging.DEBUG)
-# create file handler which logs even debug messages
-fh = logging.FileHandler('debug.log',mode='w')
+fh = RotatingFileHandler('debug.log', mode='a', maxBytes=1*1024*1024, 
+                                 backupCount=1, encoding=None, delay=0)
 fh.setLevel(logging.DEBUG)
-# create console handler with a higher log level
 ch = logging.StreamHandler()
 ch.setLevel(logging.ERROR)
-# create formatter and add it to the handlers
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 ch.setFormatter(formatter)
-# add the handlers to the logger
 logger.addHandler(fh)
 logger.addHandler(ch)
+
+import webbrowser
 
 # --------------------------------------------------   
 # Classe principale gérant l'application
@@ -127,7 +129,7 @@ class Window(QMainWindow):
         self.loupe = False
         self.newopen = False
         self.webserver_running = False
-        self.version = "<b>ChronoPhys</b> est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques<br><br><b>License Créative Commons</b> : Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions (BY-NC-SA)<br><b>Auteur</b> : Thibault Giauffret, <a href=\"https://ensciences.fr\">ensciences.fr</a>(2022)<hr><b>Version</b> : dev-beta v0.4.1 (09 mai 2022)<br><b>Bugs</b> : <a href=\"mailto:contact@ensciences.fr\">contact@ensciences.fr</a>"
+        self.version = "<b>ChronoPhys</b> est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques<br><br><b>Licence</b> : GNU GPLv3 <br><b>Auteur</b> : Thibault Giauffret, <a href=\"https://ensciences.fr\">ensciences.fr</a>(2022)<hr><b>Version</b> : "+version_number+"<br><b>Contact</b> : <a href=\"mailto:contact@ensciences.fr\">contact@ensciences.fr</a>"
 
         # Ajout du plot au canvas
         self.figure = Figure()
@@ -240,6 +242,12 @@ class Window(QMainWindow):
         self.valeurEtalon.setValidator(self.onlyDouble)
 
         self.action_propos.triggered.connect(self.infos_clicked)
+        self.actionTutoriel_en_ligne.triggered.connect(self.tutoriel_clicked)
+        self.actionSignaler_un_bug.triggered.connect(self.bug_clicked)
+        self.tutoButton.clicked.connect(self.tutoriel_clicked)
+        self.bugButton.clicked.connect(self.bug_clicked)
+        self.tutoButton.setIcon(self.icon_from_svg(resource_path("assets/icons/book-open.svg")))
+        self.bugButton.setIcon(self.icon_from_svg(resource_path("assets/icons/bug.svg")))
         self.playButton.clicked.connect(self.play)
 
         # Affichage de la fenêtre
@@ -282,6 +290,7 @@ class Window(QMainWindow):
 
         self.label_infos.setText(self.version)
         self.label_infos.setTextFormat(Qt.RichText)
+        self.label_infos.setOpenExternalLinks(True)
 
         self.openButton.setStyleSheet("font-weight: bold;")
         self.phoneButton.setStyleSheet("font-weight: bold;")
@@ -1229,6 +1238,12 @@ class Window(QMainWindow):
             print("Success!")
         else:
             print("Cancel")
+
+    def tutoriel_clicked(self):
+        webbrowser.open('https://www.ensciences.fr/read.php?article=820#interface')
+
+    def bug_clicked(self):
+        webbrowser.open('https://www.ensciences.fr/contact.php?objet=chronophys')
     
     # --------------------------------------------------   
     # Gestion de la fermeture
@@ -1245,7 +1260,7 @@ class Window(QMainWindow):
 # Classe pour les boîtes de dialogue simples
 # -------------------------------------------------- 
 class CustomDialog(QDialog):
-    def __init__(self, themessage, qrcode=None):
+    def __init__(self, themessage):
         super().__init__()
 
         logger.info("Affichage de CustomDialog")
@@ -1265,7 +1280,8 @@ class CustomDialog(QDialog):
 
         message = QLabel(themessage)
         message.setTextFormat(Qt.RichText)
-        message.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        #message.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        message.setOpenExternalLinks(True)
            
         self.mainlayout.addWidget(message)
         self.mainwidget.setLayout(self.mainlayout)
@@ -1619,7 +1635,7 @@ class WebcamDialog(QDialog):
             self.widthEdit.setText(str(self.res_width))
             self.heightEdit.setText(str(self.res_height))
             if sys.platform == "win32":
-                logger.info("L'exposition choisies est : " + str(self.exposition))
+                logger.info("L'exposition choisies est : " + self.exposition)
                 self.expositionEdit.setText(str(self.exposition))
             else:
                 self.expositionEdit.setText(str(self.exposition))
@@ -1878,9 +1894,12 @@ def openFolder():
 
 if __name__ == "__main__":
     logger.info("-------------------------------------------------------------")
-    logger.info("Démarrage de l'application")
+    logger.info("Démarrage de l'application Chronophys")
+    logger.info("Version de l'application : "+ version_number)
+    logger.info("Plateforme : "+str(sys.platform))
     logger.info("-------------------------------------------------------------")
     try:
+        logger.warning("Création du dossier videos")
         os.mkdir("./videos")
     except FileExistsError:
         logger.warning("Le dossier videos existe déjà")
