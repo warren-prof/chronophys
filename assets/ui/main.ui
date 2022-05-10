@@ -318,7 +318,7 @@
          <string notr="true"/>
         </property>
         <property name="currentIndex">
-         <number>0</number>
+         <number>2</number>
         </property>
         <widget class="QWidget" name="tab">
          <attribute name="title">
@@ -1332,27 +1332,8 @@ QGroupBox::title {
                  <string>     Logiciel    </string>
                 </property>
                 <layout class="QGridLayout" name="gridLayout_11">
-                 <item row="0" column="3">
-                  <widget class="QLabel" name="label_ensciences">
-                   <property name="sizePolicy">
-                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                     <horstretch>0</horstretch>
-                     <verstretch>0</verstretch>
-                    </sizepolicy>
-                   </property>
-                   <property name="minimumSize">
-                    <size>
-                     <width>80</width>
-                     <height>80</height>
-                    </size>
-                   </property>
-                   <property name="text">
-                    <string/>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="0" column="0">
-                  <spacer name="horizontalSpacer_4">
+                 <item row="0" column="4">
+                  <spacer name="horizontalSpacer_5">
                    <property name="orientation">
                     <enum>Qt::Horizontal</enum>
                    </property>
@@ -1389,32 +1370,6 @@ QGroupBox::title {
                    </property>
                   </widget>
                  </item>
-                 <item row="0" column="2">
-                  <spacer name="horizontalSpacer_3">
-                   <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
-                   </property>
-                   <property name="sizeHint" stdset="0">
-                    <size>
-                     <width>40</width>
-                     <height>20</height>
-                    </size>
-                   </property>
-                  </spacer>
-                 </item>
-                 <item row="0" column="4">
-                  <spacer name="horizontalSpacer_5">
-                   <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
-                   </property>
-                   <property name="sizeHint" stdset="0">
-                    <size>
-                     <width>40</width>
-                     <height>20</height>
-                    </size>
-                   </property>
-                  </spacer>
-                 </item>
                  <item row="1" column="0" colspan="5">
                   <widget class="QLabel" name="label_infos">
                    <property name="sizePolicy">
@@ -1433,6 +1388,69 @@ QGroupBox::title {
                     <bool>true</bool>
                    </property>
                   </widget>
+                 </item>
+                 <item row="0" column="2">
+                  <spacer name="horizontalSpacer_3">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item row="0" column="3">
+                  <widget class="QLabel" name="label_ensciences">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize">
+                    <size>
+                     <width>80</width>
+                     <height>80</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string/>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="0">
+                  <spacer name="horizontalSpacer_4">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item row="2" column="1" colspan="3">
+                  <layout class="QHBoxLayout" name="horizontalLayout_3">
+                   <item>
+                    <widget class="QPushButton" name="tutoButton">
+                     <property name="text">
+                      <string>Tutoriel rapide</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="bugButton">
+                     <property name="text">
+                      <string>Signaler un bug</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
                  </item>
                 </layout>
                </widget>
@@ -1480,6 +1498,9 @@ QGroupBox::title {
     <property name="title">
      <string>Aide</string>
     </property>
+    <addaction name="actionTutoriel_en_ligne"/>
+    <addaction name="actionSignaler_un_bug"/>
+    <addaction name="separator"/>
     <addaction name="action_propos"/>
    </widget>
    <addaction name="menuFichier"/>
@@ -1547,6 +1568,16 @@ QGroupBox::title {
   <action name="actionEnregistrer_une_vid_o_avec_la_webcam">
    <property name="text">
     <string>Enregistrer une vidéo avec la webcam</string>
+   </property>
+  </action>
+  <action name="actionTutoriel_en_ligne">
+   <property name="text">
+    <string>Tutoriel en ligne</string>
+   </property>
+  </action>
+  <action name="actionSignaler_un_bug">
+   <property name="text">
+    <string>Signaler un bug</string>
    </property>
   </action>
  </widget>
