@@ -1,9 +1,9 @@
 # ChronoPhys est un logiciel gratuit pour réaliser des chronophotographies en Sciences-Physiques
 # Licence : GNU GPLv3 
 # Auteur : Thibault Giauffret, ensciences.fr (2022)
-# Version : dev-beta v0.4.2 (10 mai 2022)
+# Version : dev-beta v0.5 (13 mai 2022)
 
-version_number = "dev-beta v0.4.2 (10 mai 2022)"
+version_number = "dev-beta v0.5 (13 mai 2022)"
 
 # --------------------------------------------------   
 # Importation des librairies
@@ -70,8 +70,8 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
 # Gestion de l'importation avec OpenCV
-from extract import (extract_images, extract_infos, webcam_init, webcam_get_image, webcam_init_capture, webcam_write_image, webcam_end_capture, list_webcam_ports, release_cap)
-from webserver import (get_address, start_server)
+from extract import (extract_images, extract_infos, webcam_init, webcam_get_image, webcam_init_capture, webcam_write_image, webcam_end_capture, list_webcam_ports, release_cap, set_property, set_exposition)
+from webserver import (get_address, start_server, have_internet)
 
 # Gestion des qrcodes
 import qrcode
@@ -235,7 +235,6 @@ class Window(QMainWindow):
         self.styleBox.setEnabled(False)
         self.validateButton.setEnabled(False)
         self.tabWidget.setTabEnabled(2, False);
-
 
         self.onlyDouble = QDoubleValidator()
         self.onlyDouble.setLocale(QLocale("en_US"))
@@ -445,39 +444,50 @@ class Window(QMainWindow):
 
         logger.info("Importation d'une vidéo depuis un smartphone")
         if self.webserver_running == False:
-            logger.info("Lancement du thread avec WebWorker")
             try :
-                # On crée le QThread object
-                self.web_thread = QThread()
-                self.web_thread.setTerminationEnabled(True)
+                if have_internet():
+                    logger.info("Ping internet OK, lancement du thread avec WebWorker")
+                    # On crée le QThread object
+                    self.web_thread = QThread()
+                    self.web_thread.setTerminationEnabled(True)
 
-                # On crée l'objet "Worker"
-                self.web_worker = WebWorker()
+                    # On crée l'objet "Worker"
+                    self.web_worker = WebWorker()
 
-                # On déplace le worker dans le thread
-                self.web_worker.moveToThread(self.web_thread)
+                    # On déplace le worker dans le thread
+                    self.web_worker.moveToThread(self.web_thread)
 
-                # On connecte les signaux et les slots
-                self.web_thread.started.connect(self.web_worker.run)
-                self.web_worker.finished.connect(self.stop_webserver)
-                self.web_worker.finished.connect(self.web_thread.quit)
-                self.web_worker.finished.connect(self.web_worker.deleteLater)
-                self.web_thread.finished.connect(self.web_thread.deleteLater)
+                    # On connecte les signaux et les slots
+                    self.web_thread.started.connect(self.web_worker.run)
+                    self.web_worker.finished.connect(self.stop_webserver)
+                    self.web_worker.finished.connect(self.web_thread.quit)
+                    self.web_worker.finished.connect(self.web_worker.deleteLater)
+                    self.web_thread.finished.connect(self.web_thread.deleteLater)
 
-                self.web_worker.video.connect(self.video_received)
+                    self.web_worker.video.connect(self.video_received)
 
-                # On démarre le thread
-                self.web_thread.start()
+                    # On démarre le thread
+                    self.web_thread.start()
 
-                self.webserver_running = True
+                    self.webserver_running = True
+
+                    self.server_dlg = WebDialog()
+                    if self.server_dlg.exec():
+                        print("Success!")
+                    else:
+                        print("Cancel!")
+                else :
+                    logger.warning("Aucune connexion internet disponible, impossible de démarrer le serveur web")
+                    dlg = CustomDialog("Aucune connexion internet n'est disponible. Impossible de démarrer le serveur web pour l'acquisition à l'aide d'un smartphone ou d'une tablette..")
+                    if dlg.exec():
+                        print("Success!")
+                    else:
+                        print("Cancel!")
+                    
             except Exception as ex:
                 logger.exception("Une erreur est survenue : " + str(ex))
 
-        self.server_dlg = WebDialog()
-        if self.server_dlg.exec():
-            print("Success!")
-        else:
-            print("Cancel!")
+        
 
     def stop_webserver(self):
         self.webserver_running = False
@@ -1540,7 +1550,7 @@ class ImportDialog(QDialog):
 class WebcamDialog(QDialog):
     def __init__(self):
         super().__init__()
-        logger.info("Affichage de WabcamDialog")
+        logger.info("Affichage de WebcamDialog")
 
         loadUi(resource_path('assets/ui/webcam.ui'), self)
         self.setWindowTitle("Enregistrement d'une vidéo")
@@ -1557,7 +1567,7 @@ class WebcamDialog(QDialog):
         self.capture.setStyleSheet("font-weight: bold;background-color:'#1b7a46';color:'#fff'")
 
         self.refreshButton.setIcon(self.icon_from_svg(resource_path("assets/icons/arrow-rotate-right.svg")))
-        self.applyButton.setIcon(self.icon_from_svg(resource_path("assets/icons/check.svg")))
+        self.paramButton.setIcon(self.icon_from_svg(resource_path("assets/icons/gear.svg")))
         
         self.infos.setText("<p><b>"+str(os.path.join(application_path ,  "videos", ""))+"</b></p>")
         self.infos.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -1565,26 +1575,218 @@ class WebcamDialog(QDialog):
         self.openFolderButton.clicked.connect(openFolder);
         self.openFolderButton.setIcon(self.icon_from_svg(resource_path("assets/icons/folder-open.svg")))
 
+        self.applyButton.setIcon(self.icon_from_svg(resource_path("assets/icons/check.svg")))
+        self.applyButton2.setIcon(self.icon_from_svg(resource_path("assets/icons/check.svg")))
+
+        self.defaultButton.setIcon(self.icon_from_svg(resource_path("assets/icons/arrow-rotate-left.svg")))
+
+        self.questionFps.setIcon(self.icon_from_svg(resource_path("assets/icons/circle-question.svg")))
+        self.questionExposition.setIcon(self.icon_from_svg(resource_path("assets/icons/circle-question.svg")))
+        self.questionFps.setToolTip('Le nombre d\'images par secondes maximal dépend de la résolution. En diminuant la résolution, le nombre d\'images par seconde pourra être augmenté (si possible).')
+        self.questionExposition.setToolTip('La diminution du temps d\'exposition permet d\'éviter le flou cinétique mais nécessite un éclairage suffisant.')
+
         self.camera_id = None
         self.recordDone = False
         self.firstStart = True
         self.cap = None 
+        self.webcam_params = {}
+        self.paramShow = False
+        self.paramBox.hide()
+        self.setMinimumSize(420, 650)
+        self.resize(420, 650)
+        self.paramBox.setStyleSheet("QGroupBox#paramBox {border:0;}")
         
         self.refreshButton.clicked.connect(self.refresh)
-        self.applyButton.clicked.connect(self.apply)
+        self.paramButton.clicked.connect(self.open_param)
         self.selectWebcam.activated.connect(self.changeCamera)
+        self.defaultButton.clicked.connect(self.reset_params)
+
+        self.ExpositionCheckBox.setChecked(True)
+        self.ExpositionCheckBox.stateChanged.connect(lambda : self.change_exposition(self.expositionEdit.text()))
+
+        self.onlyInt = QIntValidator()
+        self.onlyInt .setLocale(QLocale("en_US"))
+
         self.refresh()
+        
         
         self.capture.clicked.connect(self.capture_start)
 
         self.btn_apply = self.buttonBox.button(QDialogButtonBox.Ok)
-        self.onlyDouble = QDoubleValidator()
-        self.onlyDouble.setLocale(QLocale("en_US"))
-        self.heightEdit.setValidator(self.onlyDouble)
-        self.widthEdit.setValidator(self.onlyDouble)
-        self.expositionEdit.setValidator(self.onlyDouble)
 
-        #self.image_label.setScaledContents(True)
+        self.heightEdit.setValidator(self.onlyInt)
+        self.widthEdit.setValidator(self.onlyInt)
+        self.expositionEdit.setValidator(self.onlyInt)
+
+        self.widthEdit.setText(str(int(self.webcam_params["res_width"])))
+        self.heightEdit.setText(str(int(self.webcam_params["res_height"])))
+        if sys.platform == "win32":
+            logger.info("L'exposition choisie est : " + str(self.exposition))
+            self.expositionEdit.setText(str(self.webcam_params["exposition"]))
+        else:
+            self.expositionEdit.setText(str(self.webcam_params["exposition"]))
+
+
+    def update_params(self):
+        self.luminositeSlider.setRange(0, 255)
+        self.luminositeSlider.setValue(self.webcam_params["luminosite"])
+        self.luminositeSlider.valueChanged.connect(self.change_luminosite)
+        self.luminositeEdit.setValidator(self.onlyInt)
+        self.luminositeEdit.setText(str(self.webcam_params["luminosite"]))
+        self.luminositeEdit.textChanged.connect(self.change_luminosite)
+
+        self.contrasteSlider.setRange(0, 255)
+        self.contrasteSlider.setValue(self.webcam_params["contraste"])
+        self.contrasteSlider.valueChanged.connect(self.change_contraste)
+        self.contrasteEdit.setValidator(self.onlyInt)
+        self.contrasteEdit.setText(str(self.webcam_params["contraste"]))
+        self.contrasteEdit.textChanged.connect(self.change_contraste)
+
+        self.expositionEdit.setValidator(self.onlyInt)
+        self.expositionEdit.setText(str(self.webcam_params["exposition"]))
+        self.expositionEdit.textChanged.connect(self.change_exposition)
+
+        self.saturationSlider.setRange(0, 255)
+        self.saturationSlider.setValue(self.webcam_params["saturation"])
+        self.saturationSlider.valueChanged.connect(self.change_saturation)
+        self.saturationEdit.setValidator(self.onlyInt)
+        self.saturationEdit.setText(str(self.webcam_params["saturation"]))
+        self.saturationEdit.textChanged.connect(self.change_saturation)
+
+        self.gammaSlider.setRange(0, 255)
+        self.gammaSlider.setValue(self.webcam_params["gamma"])
+        self.gammaSlider.valueChanged.connect(self.change_gamma)
+        self.gammaEdit.setValidator(self.onlyInt)
+        self.gammaEdit.setText(str(self.webcam_params["gamma"]))
+        self.gammaEdit.textChanged.connect(self.change_gamma)
+
+        self.netteteSlider.setRange(0, 255)
+        self.netteteSlider.setValue(self.webcam_params["nettete"])
+        self.netteteSlider.valueChanged.connect(self.change_nettete)
+        self.netteteEdit.setValidator(self.onlyInt)
+        self.netteteEdit.setText(str(self.webcam_params["nettete"]))
+        self.netteteEdit.textChanged.connect(self.change_nettete)
+
+        self.blancSlider.setRange(2000, 6500)
+        self.blancSlider.setValue(self.webcam_params["blanc"])
+        self.blancSlider.valueChanged.connect(self.change_blanc)
+        self.blancEdit.setValidator(self.onlyInt)
+        self.blancEdit.setText(str(self.webcam_params["blanc"]))
+        self.blancEdit.textChanged.connect(self.change_blanc)
+
+        self.teinteSlider.setRange(0, 255)
+        self.teinteSlider.setValue(self.webcam_params["teinte"])
+        self.teinteSlider.valueChanged.connect(self.change_teinte)
+        self.teinteEdit.setValidator(self.onlyInt)
+        self.teinteEdit.setText(str(self.webcam_params["teinte"]))
+        self.teinteEdit.textChanged.connect(self.change_teinte)
+
+        self.widthEdit.setValidator(self.onlyInt)
+        self.widthEdit.setText(str(int(self.webcam_params["res_width"])))
+        self.heightEdit.setValidator(self.onlyInt)
+        self.heightEdit.setText(str(int(self.webcam_params["res_height"])))
+        self.applyButton.clicked.connect(self.apply)
+
+        self.fpsEdit.setValidator(self.onlyInt)
+        self.fpsEdit.setText(str(int(self.webcam_params["fps"])))
+        self.applyButton2.clicked.connect(self.apply)
+
+    def change_luminosite(self, value):
+        #logger.info("Modification de la luminosité : " + str(value))
+        if value != '':
+            self.webcam_params["luminosite"]=int(value)
+            self.luminositeSlider.setValue(int(value))
+            self.luminositeEdit.setText(str(value))
+            self.cap = set_property("luminosite", int(value), self.cap)
+
+    def change_contraste(self, value):
+        #logger.info("Modification du contraste : " + str(value))
+        if value != '':
+            self.webcam_params["contraste"]=int(value)
+            self.contrasteSlider.setValue(int(value))
+            self.contrasteEdit.setText(str(value))
+            self.cap = set_property("contraste", int(value), self.cap)
+
+    def change_exposition(self, value):
+        #logger.info("Modification de l'exposition : " + str(value))
+        if value != '':
+            self.webcam_params["exposition"]=int(value)
+            self.cap = set_exposition(int(value), self.ExpositionCheckBox.isChecked(), self.cap)
+
+    def change_saturation(self, value):
+        #logger.info("Modification de la saturation : " + str(value))
+        if value != '':
+            self.webcam_params["saturation"]=int(value)
+            self.saturationSlider.setValue(int(value))
+            self.saturationEdit.setText(str(value))
+            self.cap = set_property("saturation", int(value), self.cap)
+
+    def change_gamma(self, value):
+        #logger.info("Modification du gamma : " + str(value))
+        if value != '':
+            self.webcam_params["gamma"]=int(value)
+            self.gammaSlider.setValue(int(value))
+            self.gammaEdit.setText(str(value))
+            self.cap = set_property("gamma", int(value), self.cap)
+
+    def change_nettete(self, value):
+        #logger.info("Modification de la nettete : " + str(value))
+        if value != '':
+            self.webcam_params["nettete"]=int(value)
+            self.netteteSlider.setValue(int(value))
+            self.netteteEdit.setText(str(value))
+            self.cap = set_property("nettete", int(value), self.cap)
+
+    def change_blanc(self, value):
+        #logger.info("Modification de la balance des blancs : " + str(value))
+        if value != '':
+            self.webcam_params["nettete"]=int(value)
+            self.blancSlider.setValue(int(value))
+            self.blancEdit.setText(str(value))
+            self.cap = set_property("blanc", int(value), self.cap)
+
+    def change_teinte(self, value):
+        #logger.info("Modification de la teinte : " + str(value))
+        if value != '':
+            self.webcam_params["teinte"]=int(value)
+            self.teinteSlider.setValue(int(value))
+            self.teinteEdit.setText(str(value))
+            self.cap = set_property("teinte", int(value), self.cap)
+
+    def reset_params(self):
+        logger.info("Restoration des paramètres par défaut de la caméra")
+        if self.cap != None and self.firstStart != True:
+            release_cap(self.cap)
+            self.timer.stop()
+            self.cap = None 
+        self.firstStart = True
+        self.apply()
+
+    # def change_res(self, value):
+    #     width = int(self.widthEdit.text())
+    #     height = int(self.heightEdit.text())
+    #     if width != '' or height != '':
+    #         self.webcam_params["res_width"]=int(width)
+    #         self.webcam_params["res_height"]=int(height)
+    #         self.cap, new_width, new_height = set_res(self.cap, width, height)
+    #         self.webcam_params["res_width"]=int(new_width)
+    #         self.webcam_params["res_height"]=int(new_height)
+    #         self.widthEdit.setText(str(self.webcam_params["res_width"]))
+    #         self.heightEdit.setText(str(self.webcam_params["res_height"]))
+            
+
+    def open_param(self):
+        logger.info("Affichage des paramètres de la webcam")
+        if self.paramShow == False:
+            self.paramBox.show()
+            self.paramShow = True
+            self.setMinimumSize(840, 650)
+            self.resize(840, 650)
+        else:
+            self.paramBox.hide()
+            self.paramShow = False
+            self.setMinimumSize(420, 650)
+            self.resize(420, 650)
 
     def refresh(self):
         logger.info("Recherche des ports pour les webcams")
@@ -1628,17 +1830,25 @@ class WebcamDialog(QDialog):
         if self.cap is None:
             if self.firstStart:
                 logger.info("Première initialisation de la webcam")
-                self.cap, self.fps, self.res_width, self.res_height, self.exposition = webcam_init(self.camera_id)
+                self.cap, self.webcam_params = webcam_init(self.camera_id)
+                self.fps, self.res_width, self.res_height,self.exposition = self.webcam_params["fps"],self.webcam_params["res_width"],self.webcam_params["res_height"],self.webcam_params["exposition"]
+                self.default_webcam_params = self.webcam_params
+
+                self.update_params()
             else:
                 logger.info("Initialisation de la webcam avec les paramètres personnalisés")
-                self.cap, self.fps, self.res_width, self.res_height, self.exposition = webcam_init(self.camera_id,int(float(self.widthEdit.text())),int(float(self.heightEdit.text())),int(float(self.expositionEdit.text())))
-            self.widthEdit.setText(str(self.res_width))
-            self.heightEdit.setText(str(self.res_height))
-            if sys.platform == "win32":
-                logger.info("L'exposition choisies est : " + self.exposition)
-                self.expositionEdit.setText(str(self.exposition))
-            else:
-                self.expositionEdit.setText(str(self.exposition))
+                self.webcam_params["res_width"] = int(self.widthEdit.text())
+                self.webcam_params["res_height"] = int(self.heightEdit.text())
+                self.webcam_params["fps"] = int(self.fpsEdit.text())
+                logger.info("Nouveaux paramètres de la webcam : "+str(self.webcam_params))
+
+                self.cap, self.webcam_params = webcam_init(self.camera_id,self.webcam_params)
+                self.fps, self.res_width, self.res_height,self.exposition = self.webcam_params["fps"],self.webcam_params["res_width"],self.webcam_params["res_height"],self.webcam_params["exposition"]
+
+                self.widthEdit.setText(str(int(self.webcam_params["res_width"])))
+                self.heightEdit.setText(str(int(self.webcam_params["res_height"])))
+                self.fpsEdit.setText(str(int(self.webcam_params["fps"])))
+
             self.timer2 = QTimer(self)
             self.timer2.timeout.connect(self.capture_image)
             self._image_counter = 0
@@ -1649,7 +1859,7 @@ class WebcamDialog(QDialog):
     def changeCamera(self):
         release_cap(self.cap)
         self.camera_id = int(self.selectWebcam.currentText().replace('Camera ', ''))
-        self.refresh()
+        self.apply()
 
     pyqtSlot()
     def update_frame(self):
@@ -1721,6 +1931,7 @@ class WebcamDialog(QDialog):
         qp.fillRect( img.rect(), self.infos.palette().color(QPalette.Foreground) )
         qp.end()
         return QIcon(img)
+
 
 
 # --------------------------------------------------   

@@ -18,7 +18,8 @@ from cv2 import (
     rotate,
     flip,
     CAP_PROP_EXPOSURE,
-    CAP_PROP_AUTO_EXPOSURE
+    CAP_PROP_AUTO_EXPOSURE,
+    CAP_PROP_SETTINGS,
 )
 
 from datetime import datetime
@@ -34,7 +35,6 @@ def extract_infos(video_file):
     frameSize = (camera_Width, camera_Height)
 
     fps = video_capture.get(CAP_PROP_FPS) 
-    print(fps)
     frame_count = int(video_capture.get(CAP_PROP_FRAME_COUNT))
     duration = frame_count/fps
 
@@ -84,7 +84,6 @@ def extract_images(video_file,settings_perso):
             video_capture.set(CAP_PROP_POS_FRAMES, i) 
             ret, frameOrig = video_capture.read()
             if ret == True:
-                # print(i)
                 mytime.append(video_capture.get(CAP_PROP_POS_MSEC))
                 frame = cvtColor(resize(frameOrig, frameSize,fx=0,fy=0, interpolation = INTER_AREA), COLOR_BGR2RGB)
                 if settings_perso[3] == 90:
@@ -115,32 +114,112 @@ def extract_images(video_file,settings_perso):
         settings["height"] = frameSize[1]
         return images, settings, error, mytime
 
-def webcam_init(camera_id, width=None, height=None, exposition=None):
+def webcam_init(camera_id, params=None):
+    
     cap = VideoCapture(camera_id)
     ret_val , cap_for_exposure = cap.read()
-    print(cap.get(CAP_PROP_EXPOSURE))
-    print(cap.get(CAP_PROP_AUTO_EXPOSURE))
-    if width!=None and height!=None and exposition!=None:
-        cap.set(CAP_PROP_FRAME_HEIGHT, height)
-        cap.set(CAP_PROP_FRAME_WIDTH,  width)
-        cap.set(CAP_PROP_AUTO_EXPOSURE, 3) # D'abord mode auto
-        cap.set(CAP_PROP_AUTO_EXPOSURE, 1) # puis mode manuel
-        if sys.platform == "win32":
-            cap.set(CAP_PROP_EXPOSURE, round(ln(exposition*0.001)/ln(2),2)) # On convertit l'exposition, sous windows : 2^-5 = 30 ms
-        else:
-            cap.set(CAP_PROP_EXPOSURE, exposition) 
-        fps = cap.get(CAP_PROP_FPS)
-        res_height = cap.get(CAP_PROP_FRAME_HEIGHT)
-        res_width = cap.get(CAP_PROP_FRAME_WIDTH)
-    else:
+
+    if params!=None:
+        
+        cap.set(CAP_PROP_FRAME_HEIGHT, params["res_height"])
+        cap.set(CAP_PROP_FRAME_WIDTH,  params["res_width"])
+        cap.set(CAP_PROP_FPS,  params["fps"])
+        params["res_height"] = cap.get(CAP_PROP_FRAME_HEIGHT)
+        params["res_width"] = cap.get(CAP_PROP_FRAME_WIDTH)
+        params["fps"] = cap.get(CAP_PROP_FPS)
+
+    else:   
+        
+        params = {}
         cap.set(CAP_PROP_AUTO_EXPOSURE, 3)
         fps = cap.get(CAP_PROP_FPS)
         res_height = cap.get(CAP_PROP_FRAME_HEIGHT)
         res_width = cap.get(CAP_PROP_FRAME_WIDTH)
-        exposition = cap.get(CAP_PROP_EXPOSURE)
+        cap.set(CAP_PROP_AUTO_EXPOSURE, 3) # D'abord mode auto
+        #exposition = cap.get(CAP_PROP_EXPOSURE)
+
+        
         if sys.platform == "win32":
+            exposition = -4
             exposition = 2**exposition*1000
-    return cap, fps, res_width, res_height, exposition
+        else :
+            exposition = 60
+
+        
+        cap.set(CAP_PROP_EXPOSURE, exposition)
+
+        luminosite = 100
+        cap.set(10,luminosite)
+
+        contraste = 30
+        cap.set(11, contraste)
+
+        saturation = 100
+        cap.set(12,saturation)
+
+        gamma = 0
+        cap.set(22,gamma)
+
+        nettete = 128
+        cap.set(20,nettete)
+
+        blanc = 5500
+        cap.set(44,0) # Passage en mode manuel
+        cap.set(45,blanc)
+
+        teinte = 0
+        cap.set(13, teinte)
+
+        params["fps"],params["res_width"],params["res_height"],params["exposition"], params["luminosite"], params["contraste"], params["saturation"], params["gamma"], params["nettete"], params["blanc"], params["teinte"] = int(fps), int(res_width), int(res_height),int(exposition), int(luminosite), int(contraste), int(saturation), int(gamma), int(nettete), int(blanc), int(teinte)
+        #print(params)
+    
+    return cap, params
+
+def set_property(property, value, cap):
+    if property == "luminosite":
+        cap.set(10, value)
+    elif property == "contraste":
+        cap.set(11, value)
+    elif property == "saturation":
+        cap.set(12, value)
+    elif property == "gamma":
+        cap.set(22, value)
+    elif property == "nettete":
+        cap.set(20, value)
+    elif property == "blanc":
+        cap.set(45, value)
+    elif property == "teinte":
+        cap.set(13, value)
+    
+    # print("FPS", cap.get(5))
+    # print("BRIGHTNESS", cap.get(10))
+    # print("CONTRAST", cap.get(11))
+    # print("SATURATION", cap.get(12))
+    # print("EXPOSURE", cap.get(15))
+    # print("GAMMA", cap.get(22))
+    # print("GAIN", cap.get(14))
+    # print("FOCUS", cap.get(28)) 
+
+    return cap
+
+def set_exposition(value, check, cap):
+    if not check:
+        cap.set(CAP_PROP_AUTO_EXPOSURE, 1) # mode manuel
+        if sys.platform == "win32":
+            cap.set(CAP_PROP_EXPOSURE, int(ln(value*0.001)/ln(2)))
+        else:
+            cap.set(CAP_PROP_EXPOSURE, value) 
+    else:
+        cap.set(CAP_PROP_AUTO_EXPOSURE, 3) # mode auto
+    return cap
+
+# def set_res(cap, width, height):
+
+#     cap.set(CAP_PROP_FRAME_WIDTH, width)
+#     cap.set(CAP_PROP_FRAME_WIDTH, height)
+#     new_width = cap.get(CAP_PROP_FRAME_WIDTH)
+#     new_height = cap.get(CAP_PROP_FRAME_HEIGHT)
+#     return cap, new_width, new_height
 
 def webcam_get_image(cap):
     ret, image = cap.read()
@@ -154,7 +233,6 @@ def webcam_init_capture(fps, application_path, width, height):
     dt_string = now.strftime("%d%m%Y_%H_%M_%S")
     fourcc = VideoWriter_fourcc(*'MJPG')
     path = str(os.path.join(application_path,'videos','WebcamVid_'+dt_string+'.avi'))
-    print(path)
     out1 = VideoWriter(path, apiPreference = 0, fourcc = fourcc, fps = fps, frameSize =(int(width),int(height)))
     return out1, path
 
@@ -178,18 +256,30 @@ def list_webcam_ports():
         camera = VideoCapture(dev_port)
         if not camera.isOpened():
             non_working_ports.append(dev_port)
-            print("Port %s is not working." %dev_port)
+            #print("Port %s is not working." %dev_port)
         else:
             is_reading, img = camera.read()
             w = camera.get(3)
             h = camera.get(4)
             if is_reading:
-                print("Port %s is working and reads images (%s x %s)" %(dev_port,h,w))
+                #print("Port %s is working and reads images (%s x %s)" %(dev_port,h,w))
                 working_ports.append(dev_port)
             else:
-                print("Port %s for camera ( %s x %s) is present but does not reads." %(dev_port,h,w))
+                #print("Port %s for camera ( %s x %s) is present but does not reads." %(dev_port,h,w))
                 available_ports.append(dev_port)
         dev_port +=1
-    print(working_ports)
+    #print(working_ports)
     return working_ports
         
+# def changeBrightness(value, cap):
+#     brightness = 
+#     brightness = (brightness - 0)/(255 - 0)
+#     print(brightness)
+#     cap.set(10,brightness)
+
+# def changeContrast(x, cap):
+#     contrast = 
+#     contrast = (contrast - 0)/(255 - 0)
+#     print(contrast)
+#     cap.set(11,contrast)
+
